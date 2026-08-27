@@ -1,0 +1,23 @@
+# Credenciais
+.env
+
+# Configurações do editor
+.vscode/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs e erros
+*.log
+storage/logs/
+
+# Dependências (se usar Composer futuramente)
+vendor/
+
+# Uploads de usuários (storage)
+storage/uploads/
+
+public/uploads/**
+!public/uploads/**/
+!public/uploads/**/.gitkeep
