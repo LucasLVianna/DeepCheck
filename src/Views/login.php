@@ -10,7 +10,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
-    <link rel="stylesheet" href="/DeepCheck/public/css/login.css">
+    <link rel="stylesheet" href="/public/css/login.css">
 </head>
 
 <body>
@@ -63,6 +63,6 @@
         
     </section>
 
-<script src="/DeepCheck/public/js/login.js"></script>
+<script src="/public/js/login.js"></script>
 </body>
 </html>

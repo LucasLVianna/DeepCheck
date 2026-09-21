@@ -22,7 +22,7 @@ cadastroForm.addEventListener('submit', (event) => {
 });
 
 entrarButton.addEventListener('click', () => {
-    window.location.href = '/DeepCheck/login';
+    window.location.href = '/src/Views/login.php';
 });
 
 cepInput.addEventListener('input', () => {
@@ -67,7 +67,7 @@ async function cadastrar() {
     fd.append('senha', senha);
     fd.append('cep', cep);
 
-    const retorno = await fetch('/DeepCheck/src/Controllers/cadastrar_backend.php', {
+    const retorno = await fetch('/src/Controllers/cadastrar_backend.php', {
         method: 'POST',
         body: fd
     });
@@ -77,7 +77,7 @@ async function cadastrar() {
         document.getElementById('error').style.color = '#00ffa3';
         document.getElementById('error').textContent = 'SUCESSO! Cadastro realizado com êxito' + '. Redirecionando para a página de login...';
         setTimeout(() => {
-            window.location.href = '/mykeeper/usuario_login';
+            window.location.href = '/src/Views/login.php';
         }, 1000);
         return;
     }else{

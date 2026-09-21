@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastro</title>
-    <link rel="stylesheet" href="/DeepCheck/public/css/cadastro.css">
+    <link rel="stylesheet" href="/public/css/cadastro.css">
 </head>
 
 <body>
@@ -71,5 +71,5 @@
         </div>
     </section>
 </body>
-<script src="/DeepCheck/public/js/cadastrar.js?v=20260406-cep"></script>
+<script src="/public/js/cadastrar.js?v=20260406-cep"></script>
 </html>

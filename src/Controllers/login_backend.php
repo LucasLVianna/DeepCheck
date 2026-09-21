@@ -6,7 +6,7 @@ include_once(__DIR__ . '/../../config/conexao.php');
         session_start();
     } 
 
-$stmt = $conexao->prepare("SELECT * FROM usuario WHERE email = ?");
+$stmt = $conexao->prepare("SELECT * FROM usuario WHERE email_usuario = ?");
 $stmt->bind_param("s", $_POST['email']);
 $stmt->execute();
 $resultado = $stmt->get_result();
@@ -25,14 +25,14 @@ if ($usuario && password_verify($_POST['senha'], $usuario['senha'])) {
 
     $_SESSION['usuario'] = [
         'id'   => $usuario['id'],
-        'nome' => $usuario['nome']
+        'nome' => $usuario['nome_usuario']
     ];
     $_SESSION['logado'] = true;
 
     $retorno = [
         'status'   => 'ok',
         'mensagem' => 'Login realizado com sucesso',
-        'redirect' => '/DeepCheck/home'
+        'redirect' => '/src/Views/home.php'
     ];
 
 } else {

@@ -4,7 +4,7 @@ document.getElementById('formLogin').addEventListener('submit',(e)=>{
 })
 
 document.getElementById('createAccount').addEventListener('click', ()=>{
-    window.location.href = '/DeepCheck/cadastro.php';
+    window.location.href = '/src/Views/cadastro.php';
 })
 document.addEventListener('DOMContentLoaded', async ()=>{
     const params = new URLSearchParams(window.location.search);
@@ -38,7 +38,7 @@ async function login() {
     fd.append('email', email);
     fd.append('senha', senha);
 
-    const retorno = await fetch('/DeepCheck/src/Controllers/login_backend.php',{
+    const retorno = await fetch('/src/Controllers/login_backend.php',{
         method: "POST",
         body: fd
     })
@@ -57,7 +57,7 @@ async function login() {
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
-    const response = await fetch('/mykeeper/config/check_session.php');
+    const response = await fetch('/config/check_session.php');
     const data = await response.json();
 
     if(data.logado){

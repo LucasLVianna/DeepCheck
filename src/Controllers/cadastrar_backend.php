@@ -33,10 +33,9 @@
     }
 
     $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
-    $cep = substr($cepNumerico, 0, 5) . '-' . substr($cepNumerico, 5, 3);
 
-    $stmt = $conexao->prepare("INSERT INTO usuario (nome, email, senha, cep) VALUES (?,?,?,?)");
-    $stmt->bind_param("ssss", $nome, $email, $senhaHash, $cep);
+    $stmt = $conexao->prepare("INSERT INTO usuario (nome_usuario, email_usuario, senha, cep) VALUES (?,?,?,?)");
+    $stmt->bind_param("ssss", $nome, $email, $senhaHash, $cepNumerico);
 
     try {
         $stmt->execute();
