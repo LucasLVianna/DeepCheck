@@ -49,7 +49,8 @@ async function cadastrar() {
     }
 
     if(!senha){
-        document.getElementById('error-senha').textContent = 'Senha precisa receber valores'
+        document.getElementById('error-senha').textContent = 'Senha precisa receber valores';
+        return;
     }else if(senha.length < 8 || !/[A-Z]/.test(senha) || !/[a-z]/.test(senha) || !/[0-9]/.test(senha) || !/[@$!%*?&]/.test(senha)) {
         document.getElementById('error-senha').textContent = 'ERRO! Senha deve conter no mínimo 8 caracteres, letras maiúsculas, minúsculas, números e caracteres especiais.';
         return;
@@ -69,6 +70,7 @@ async function cadastrar() {
 
     const retorno = await fetch('/src/Controllers/cadastrar_backend.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
         body: fd
     });
 

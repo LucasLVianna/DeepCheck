@@ -1,29 +1,23 @@
 <?php
-    header('X-Content-Type-Options: nosniff');
-    header('X-Frame-Options: DENY');
-    header('X-XSS-Protection: 1; mode=block');
+// Headers de segurança enviados por todas as respostas PHP.
+// Incluído automaticamente por config/auth.php.
 
-    if (session_status() == PHP_SESSION_NONE) {
-        session_start();
-    }
+function requisicao_https(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['SERVER_PORT'] ?? null) == 443;
+}
 
-    define('SESSION_TIMEOUT', 1800); // 30 minutos
+header_remove('X-Powered-By');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+// O filtro XSS legado dos navegadores foi descontinuado e podia ser explorado; "0" o desliga.
+header('X-XSS-Protection: 0');
 
-    if (!empty($_SESSION['usuario']['id'])) {
-        $agora = time();
-        $ultimaAtividade = $_SESSION['ultima_atividade'] ?? $agora;
-
-        if (($agora - $ultimaAtividade) > SESSION_TIMEOUT) {
-            session_unset();
-            session_destroy();
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'status'   => 'nok',
-                'mensagem' => 'Sessão expirada por inatividade'
-            ]);
-            exit;
-        }
-
-        $_SESSION['ultima_atividade'] = $agora;
-    }
-?>
+// HSTS só faz sentido (e só é respeitado) quando a requisição chega via HTTPS.
+if (requisicao_https()) {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}

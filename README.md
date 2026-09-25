@@ -26,10 +26,14 @@ Pré-requisitos: Docker e Docker Compose.
    já instalado na máquina). Para conectar pelo MySQL Workbench, use:
    - Host: `127.0.0.1`
    - Porta: `3307` (ou o valor de `DB_EXPOSED_PORT` no `.env`)
-   - Usuário/senha: os valores de `DB_USERNAME`/`DB_PASSWORD` do `.env`
+   - Usuário: `root`, senha: `DB_ROOT_PASSWORD` do `.env`
 
-A tabela `usuario` é criada automaticamente na primeira subida do banco
-a partir de `db/init.sql`.
+O container do MySQL sobe vazio. O banco, o usuário de aplicação e as tabelas
+são criados manualmente pelo MySQL Workbench; depois disso, preencha
+`DB_NAME`, `DB_USERNAME` e `DB_PASSWORD` no `.env`.
+
+Após alterar o `Dockerfile` ou os arquivos em `docker/`, reconstrua a imagem
+com `docker compose up -d --build`.
 
 Para parar os containers:
 

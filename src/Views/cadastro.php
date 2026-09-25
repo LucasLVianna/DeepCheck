@@ -1,9 +1,14 @@
+<?php
+    require_once __DIR__ . '/../../config/auth.php';
+    redirecionar_se_logado();
+?>
 <!DOCTYPE html>
 <html lang="pt-br">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
     <title>Cadastro</title>
     <link rel="stylesheet" href="/public/css/cadastro.css">
 </head>
@@ -21,7 +26,7 @@
             <form id="formCadastro">
                 <div>
                     <div>
-                        <label for="nome">Nome completo: <span style="color: red;">*</span></label>
+                        <label for="nome">Nome completo: <span class="obrigatorio">*</span></label>
                     </div>
                     <div>
                         <input type="text" name="nome" id="nome" placeholder="Seu nome">
@@ -30,7 +35,7 @@
                 </div>
                 <div>
                     <div>
-                        <label for="email">E-mail: <span style="color: red;">*</span></label>
+                        <label for="email">E-mail: <span class="obrigatorio">*</span></label>
                     </div>
                     <div>
                         <input type="text" name="email" id="email" placeholder="seu@email.com">
@@ -40,7 +45,7 @@
 
                 <div>
                     <div>
-                        <label for="cep">CEP: <span style="color: red;">*</span></label>
+                        <label for="cep">CEP: <span class="obrigatorio">*</span></label>
                     </div>
                     <div>
                         <input type="text" name="cep" id="cep" placeholder="00000-000" maxlength="9" inputmode="numeric">
@@ -50,7 +55,7 @@
 
                 <div>
                     <div>
-                        <label for="senha">Senha: <span style="color: red;">*</span></label> <br>
+                        <label for="senha">Senha: <span class="obrigatorio">*</span></label> <br>
                     </div>
                     <div>
                         <input type="password" name="senha" id="senha" placeholder="••••••" minlength="8">
@@ -61,7 +66,7 @@
                     <p id="error"></p>
                 </div>
                 <button type="submit">Criar conta</button>
-                <span id="significadoAspas" style= "font-size: 0.72rem; color: #555; text-align: left;">*: Campo obrigatório</span>
+                <span id="significadoAspas">*: Campo obrigatório</span>
             </form>
             
             <div class="divider">
@@ -70,6 +75,6 @@
             <button type="button" id="entrar">Entrar</button>
         </div>
     </section>
+<script src="/public/js/cadastrar.js?v=20260925-csrf"></script>
 </body>
-<script src="/public/js/cadastrar.js?v=20260406-cep"></script>
 </html>

@@ -1,6 +1,6 @@
 <?php
-    session_start();
-    include_once(__DIR__ . '/../../config/verifica_login_realizado.php');
+    require_once __DIR__ . '/../../config/auth.php';
+    redirecionar_se_logado();
 ?>
 
 <!DOCTYPE html>
@@ -9,6 +9,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
     <title>Login</title>
     <link rel="stylesheet" href="/public/css/login.css">
 </head>
@@ -27,7 +28,7 @@
 
                 <div>
                     <div>
-                        <label for="email">E-mail: <span style="color: red;">*</span></label>
+                        <label for="email">E-mail: <span class="obrigatorio">*</span></label>
                     </div>
                     <div>
                         <input type="text" name="email" id="email" placeholder="seu@email.com">
@@ -38,7 +39,7 @@
 
                 <div>
                     <div>
-                        <label for="senha">Senha: <span style="color: red;">*</span></label> <br>
+                        <label for="senha">Senha: <span class="obrigatorio">*</span></label> <br>
                     </div>
                     <div>
                         <input type="password" name="senha" id="senha" placeholder="••••••" minLength="8">
@@ -51,7 +52,7 @@
                 </div>
 
                 <button type="submit">Entrar</button>
-                <span id="significadoAspas" style= "font-size: 0.72rem; color: #555; text-align: left;">*: Campo obrigatório</span>
+                <span id="significadoAspas">*: Campo obrigatório</span>
             </form>
 
             <div class="divider">

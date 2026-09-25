@@ -28,7 +28,8 @@ async function login() {
     }
 
     if(!senha){
-        document.getElementById('error-senha').textContent = 'Senha precisa receber valores'
+        document.getElementById('error-senha').textContent = 'Senha precisa receber valores';
+        return;
     }else if(senha.length < 8) {
         document.getElementById('error-senha').textContent = 'ERRO! Senha muito curta';
         return;
@@ -40,6 +41,7 @@ async function login() {
 
     const retorno = await fetch('/src/Controllers/login_backend.php',{
         method: "POST",
+        headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
         body: fd
     })
 
@@ -55,12 +57,3 @@ async function login() {
         document.getElementById('error').textContent = 'ERRO! ' + resposta.mensagem;
     };
 }
-
-document.addEventListener('DOMContentLoaded', async ()=>{
-    const response = await fetch('/config/check_session.php');
-    const data = await response.json();
-
-    if(data.logado){
-        window.location.href = data.redirect;
-    };
-});

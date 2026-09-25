@@ -1,0 +1,9 @@
+.obrigatorio {
+    color: red;
+}
+
+#significadoAspas {
+    font-size: 0.72rem;
+    color: #555;
+    text-align: left;
+}

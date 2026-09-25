@@ -1,23 +1,25 @@
-<link rel="stylesheet" href="/DeepCheck/public/css/navbar.css">
+<?php
+// Navbar compartilhada por todas as telas autenticadas.
+// A página que a inclui já deve ter carregado config/auth.php e chamado exigir_login().
+?>
+<link rel="stylesheet" href="/public/css/navbar.css">
 
 <header class="navbar">
     <div>
-        <h2>DeepCheck</h2>
+        <a class="navbar-marca" href="/src/Views/menu.php">DeepCheck</a>
     </div>
     <div>
         <nav>
-            <button id="inicioButtonLink">Início</button>
+            <a href="/src/Views/menu.php">Início</a>
 
-
-            <button id="perfilButtonLink">Perfil</button>
-
-
-            <button id="logoffButtonLink">Sair</button>
-
-            <?php if (isset($_SESSION['usuario']['nome_usuario'])): ?>
-                <span class="usuarioLogado"><?= htmlspecialchars($_SESSION['usuario']['nome_usuario']) ?></span>
+            <?php if (isset($_SESSION['usuario']['nome'])): ?>
+                <span class="usuarioLogado"><?= htmlspecialchars($_SESSION['usuario']['nome'], ENT_QUOTES, 'UTF-8') ?></span>
             <?php endif; ?>
 
+            <form method="post" action="/src/Controllers/logoff.php">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                <button type="submit" id="logoffButtonLink">Sair</button>
+            </form>
         </nav>
     </div>
 </header>
