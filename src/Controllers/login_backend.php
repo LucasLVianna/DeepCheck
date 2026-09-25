@@ -32,7 +32,7 @@ if ($usuario && password_verify($_POST['senha'], $usuario['senha'])) {
     $retorno = [
         'status'   => 'ok',
         'mensagem' => 'Login realizado com sucesso',
-        'redirect' => '/src/Views/home.php'
+        'redirect' => '/src/Views/menu.php'
     ];
 
 } else {
