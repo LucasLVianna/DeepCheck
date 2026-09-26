@@ -7,6 +7,11 @@ require_once __DIR__ . '/headers.php';
 
 const SESSION_TIMEOUT = 1800; // 30 minutos de inatividade
 
+// Hash de uma senha aleatória descartada. Usado no password_verify quando o registro
+// buscado (e-mail, código de projeto) não existe, para que o tempo de resposta seja
+// o mesmo e não revele quais registros existem.
+const HASH_FICTICIO = '$2y$10$vho2Rwfkzz8.DIL7LoNJ2OAseJz0Hbuh30Jad7oiyxAQNWLrXYBKC';
+
 function iniciar_sessao(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -140,6 +145,12 @@ function exigir_post_com_csrf(): void
             'mensagem' => 'Sessão inválida ou expirada. Recarregue a página e tente novamente.'
         ], 403);
     }
+}
+
+// Escapa texto para saída em HTML (conteúdo e atributos).
+function e(?string $texto): string
+{
+    return htmlspecialchars($texto ?? '', ENT_QUOTES, 'UTF-8');
 }
 
 function responder_json(array $dados, int $status = 200): never

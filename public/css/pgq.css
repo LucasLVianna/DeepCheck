@@ -1,0 +1,122 @@
+.pgq {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.pgq-secao {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.pgq-secao h3 {
+    margin: 0 0 0.25rem;
+}
+
+.pgq-descricao,
+.dica {
+    margin: 0;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.pgq-grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.pgq-grade label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.pgq textarea,
+.pgq input[type="text"],
+.pgq input[type="date"],
+.pgq input[type="month"] {
+    box-sizing: border-box;
+    width: 100%;
+    font: inherit;
+}
+
+.tabela-rolagem {
+    overflow-x: auto;
+}
+
+.pgq-tabela {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+}
+
+.pgq-tabela th,
+.pgq-tabela td {
+    padding: 0.35rem;
+    border: 1px solid #ddd;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.pgq-tabela thead th {
+    background: #eee;
+}
+
+.pgq-tabela tbody th {
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.pgq-tabela td:last-child:has(.js-remover-linha) {
+    width: 1%;
+}
+
+.pgq-tabela-leitura {
+    min-width: 0;
+    max-width: 480px;
+}
+
+.botao-secundario {
+    align-self: flex-start;
+}
+
+.pgq-rodape {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid #ddd;
+    background: #fff;
+}
+
+.pgq-rodape .mensagem {
+    margin: 0 auto 0 0;
+}
+
+.pgq-atualizado {
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.mensagem-erro {
+    color: #c62828;
+}
+
+.mensagem-sucesso {
+    color: #2e7d32;
+}
+
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

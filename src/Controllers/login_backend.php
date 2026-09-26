@@ -5,10 +5,6 @@ require_once __DIR__ . '/../../config/rate_limit.php';
 const LOGIN_MAX_FALHAS_CONTA = 5;  // por IP + e-mail, na janela do rate limit
 const LOGIN_MAX_FALHAS_IP    = 20; // por IP, qualquer e-mail
 
-// Hash de uma senha aleatória descartada. Usado quando o e-mail não existe, para que
-// o tempo de resposta seja o mesmo e não revele quais e-mails estão cadastrados.
-const HASH_FICTICIO = '$2y$10$vho2Rwfkzz8.DIL7LoNJ2OAseJz0Hbuh30Jad7oiyxAQNWLrXYBKC';
-
 exigir_post_com_csrf();
 
 $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));

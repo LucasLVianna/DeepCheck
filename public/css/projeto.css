@@ -1,0 +1,37 @@
+.projeto {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.projeto-cabecalho h1 {
+    margin: 0.5rem 0;
+    overflow-wrap: anywhere;
+}
+
+.abas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 1px solid #ddd;
+    margin: 1.5rem 0 1rem;
+}
+
+.aba {
+    padding: 0.6rem 1rem;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+.aba-ativa {
+    border-color: #ddd;
+    background: #f5f5f5;
+    font-weight: 600;
+}
+
+.em-construcao {
+    color: #555;
+}
