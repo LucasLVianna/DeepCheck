@@ -12,6 +12,30 @@ Este documento é o contexto persistente do projeto. Leia-o antes de qualquer al
 
 ---
 
+## ▶️ Ponto de retomada (atualizado em 2026-09-25)
+
+**Onde paramos**: Fases 1, 3 e 4 concluídas e validadas no navegador; **Fase 5 (Aba Checklist) concluída e testada via HTTP, aguardando o desenvolvedor validar no navegador**. Fase 2 (modelo de dados) avança junto com cada fase. Tudo commitado (ver `git log`).
+
+**Ao retomar, fazer nesta ordem:**
+1. Perguntar ao desenvolvedor o resultado do teste da aba Checklist no navegador (`projeto.php?id=<projeto>&aba=checklist`: adicionar itens, marcar resultados, abrir NC, escolher classificação, mudar status para resolvida / fechada por exceção, sair de NC). Corrigir o que aparecer e marcar a Fase 5 como ✅✅.
+2. (Opcional) Lembrar do `DROP INDEX uk_checklists_projeto_nome` em `checklists` (limpeza; ver "Fase 5").
+3. Iniciar a **Fase 6 — Fluxo de e-mail de NC**, seguindo o mesmo processo das fases anteriores:
+   - Ler os templates `~/Downloads/Trabalho Qualidade de Software/Não Conformidades/Solicitacao_Resolucao_Nao_Conformidade - 1..6.pdf` e o e-mail de exemplo em `~/Downloads/Trabalho Qualidade de Software/E-mails/Documentos Auditoria/` e comparar com o rascunho de `nao_conformidades` e `nc_emails_enviados` no "Modelo de Dados".
+   - **Decidir com o desenvolvedor** a integração PHP → Python (síncrona via `shell_exec` × fila assíncrona; ver "Integração PHP → Python") e o provedor/credenciais SMTP (nunca commitar credenciais: usar `.env` + `env()`). O container PHP (`php:8.2-apache`) **não tem Python instalado** — vai exigir mudança no `Dockerfile` ou um serviço separado no `docker-compose.yml`.
+   - Propor o SQL de `nao_conformidades` e `nc_emails_enviados` (status com `fechada_por_excecao`; FK `classificacao_nc_id` RESTRICT; FK para `projetos` em CASCADE; FK `checklist_item_id` — decidir RESTRICT, que bloqueia excluir item com NC enviada) e validar num MySQL descartável antes de entregar. **Não criar tabelas no banco do projeto**: o desenvolvedor aplica no Workbench e o Claude Code confere com `SHOW CREATE TABLE`.
+   - Implementar o bloqueio pendente da Fase 5: item com NC já enviada não pode sair de "Não conformidade" nem ser excluído.
+4. Fases seguintes: 7 (aba Não Conformidades + escalonamento, preenche `checklist_itens.data_escalonamento`) e 8 (edição de classificações/prazos, hoje só leitura na seção 6 do PGQ).
+
+**Forma de trabalho combinada com o desenvolvedor** (manter):
+- Uma fase por vez. Antes de codar, ler o template da fase, apontar divergências com este documento e pedir decisão; propor SQL e esperar o desenvolvedor criar as tabelas; conferir o schema real.
+- Testar tudo via HTTP (curl) com usuários de teste descartáveis (`teste.claude.*@example.com`), apagando-os ao final — **nunca mexer nos dados reais do desenvolvedor** (hoje: 2 usuários e 1 projeto dele no banco).
+- Registrar cada fase aqui (implementado, arquivos, regras, testes, pendências, convenções) e atualizar "Pendências em aberto" e "Estrutura real de arquivos".
+- Commits: só quando o desenvolvedor pedir; criar branch a partir da `main` (ele decide quando fazer merge/push).
+
+**Como retomar a conversa**: `claude --continue` (ou `claude -c`) reabre a conversa mais recente deste diretório; `claude --resume` (ou `claude -r`) mostra a lista de conversas para escolher. Mesmo numa conversa nova, este arquivo é lido automaticamente e contém todo o contexto necessário.
+
+---
+
 ## Estado Atual e Pendências (verificar antes de codar)
 
 Antes de implementar qualquer feature nova, o Claude Code deve:
@@ -223,7 +247,77 @@ Todos passaram, sem erros/warnings no log do PHP: aba renderiza para projeto sem
 - **Abas do projeto como partials em `src/Views/abas/<aba>.php`**, incluídas por `projeto.php`, que carrega os dados antes de fechar a conexão e define `$arquivosAba` (CSS/JS da aba). O partial começa com um guarda (`if (!isset(...)) { http_response_code(404); exit; }`) porque `src/Views/` é acessível pela web.
 - **Tabelas dinâmicas**: inputs com nome `<chave>[<coluna>][]` (o PHP recebe arrays paralelos por coluna), linha-modelo em `<template>`, e o formulário inteiro salvo numa transação.
 
-### Estrutura real de arquivos (após a Fase 4)
+### Decisões para a Fase 5 — Aba Checklist (confirmadas pelo desenvolvedor em 2026-09-25)
+
+Template de referência: `~/Downloads/Trabalho Qualidade de Software/Template Checklist - Processo de Qualidade/Modelo Checklist - Processo de Qualidade 1.2.xlsx` (exemplo preenchido: `~/Downloads/Checklist - Processo de Qualidade - 1.2.pdf`). Colunas: Nº, Descrição, Resultado, Data e hora da identificação da NC, Responsável pela resolução, Classificação da NC, Ação corretiva indicada, Data prevista de resolução, Data e hora do escalonamento, Data e hora da conclusão da NC, Status da NC.
+
+1. **Aderência** segue a planilha ("não se aplica" fora do NTA) + regra de status de NC (resolvida = conformidade; fechada por exceção = não aplicável) — ver "Regras de Negócio › 1. Cálculo de Aderência".
+2. **Novo status de NC `fechada_por_excecao`** (ver "Status Padronizados"). Os status do template ("Concluido / Pendente / Fechamento por Exceção") **não** são usados; vale a lista padronizada.
+3. **Apenas 1 checklist por projeto** (`UNIQUE (projeto_id)` em `checklists`). Criado sob demanda (como o PGQ).
+4. **Coluna `data_escalonamento`** adicionada a `checklist_itens` (existe no template, faltava no rascunho); preenchida na Fase 7.
+5. **Salvamento automático por item**: cada alteração é salva na hora e o servidor devolve a aderência recalculada; o JS também recalcula na hora.
+6. **Ao marcar `nao_conformidade`**: servidor grava `data_identificacao_nc` e `status_nc = 'pendente'`; ao escolher a classificação, `data_prevista_resolucao = data_identificacao_nc + prazo`.
+7. **Ao sair de `nao_conformidade`**: os dados de NC do item são limpos; se voltar a ser NC, ganha nova data de identificação. (A partir da Fase 6: bloquear se a NC já tiver sido enviada por e-mail.)
+8. **`numero_item` estável**: novo item = maior número + 1; excluir não renumera (NCs enviadas citam o número).
+9. Checklist **nasce vazio**; o usuário adiciona os itens. Qualquer membro do projeto edita.
+10. *Confirmado pelo desenvolvedor*: `data_conclusao_nc` é gravada automaticamente quando o status vira `resolvida` **ou** `fechada_por_excecao` (ambos encerram a NC) e é limpa se o status voltar para aberto.
+11. Integração PHP → Python do e-mail: decisão adiada para a Fase 6 (quando o envio é implementado).
+
+**Schema**: `checklists` foi criada com `UNIQUE (projeto_id, nome)` e `checklist_itens` não chegou a ser criada; o SQL corrigido (ALTER em `checklists` + CREATE de `checklist_itens` com o novo status) foi validado pelo Claude Code num MySQL descartável (container temporário, não o banco do projeto) e entregue ao desenvolvedor para aplicar no Workbench.
+
+**Verificado no banco (2026-09-25)**: `checklist_itens` criada exatamente como proposto. Em `checklists`, o `UNIQUE KEY uk_checklists_projeto (projeto_id)` **já foi aplicado** (a regra "1 checklist por projeto" está garantida pelo banco). Falta apenas remover o índice antigo, que ficou redundante (não causa problema, é só limpeza):
+```sql
+ALTER TABLE checklists DROP INDEX uk_checklists_projeto_nome;
+```
+
+### Fase 5 — Aba Checklist: concluída e testada via HTTP (2026-09-25)
+
+#### O que foi implementado
+
+- **Aba Checklist** (`projeto.php?id=X&aba=checklist` → partial `src/Views/abas/checklist.php`):
+  - Painel de indicadores no topo: **Aderência**, NT, NA, NTA, NC, NNC e não aplicáveis, com a fórmula explicada logo abaixo.
+  - Tabela com as colunas do template: Nº, Descrição, Resultado (Não avaliado / Conforme / Não conformidade / Não se aplica), Data e hora da identificação da NC, Responsável pela resolução, Classificação da NC (exibida como "Alta | 24 horas"), Ação corretiva indicada, Data prevista de resolução, Data e hora do escalonamento, Data e hora da conclusão da NC, Status da NC, Excluir.
+  - Campos de NC ficam desabilitados enquanto o item não for "Não conformidade"; linha de NC com fundo destacado; data prevista em vermelho quando a NC aberta está com prazo vencido.
+  - Formulário "Novo item" no fim da tabela. O checklist (`checklists`) é criado no primeiro item, com o nome `Checklist de Qualidade`.
+- **Salvamento automático por campo**: cada `change` (select na hora; texto ao sair do campo) envia só aquele campo. O JS recalcula a aderência na hora e a resposta do servidor confirma. Salvamentos da mesma linha vão em fila (ordem garantida); em erro, o campo volta ao último valor salvo e a mensagem aparece acima da tabela. Aviso `beforeunload` se houver salvamento em andamento. Confirmação antes de tirar um item de "Não conformidade" quando ele já tem dados de NC.
+- **Endpoints** (`src/Controllers/`, todos com login + CSRF + verificação de membro):
+  - `checklist_item_adicionar.php` (`projeto_id`, `descricao`) → 201 com `item_html` (linha pronta, renderizada pela mesma função da página) + `indicadores`; 409 ao atingir o limite.
+  - `checklist_item_atualizar.php` (`item_id`, `campo`, `valor`) → `item` (datas já formatadas, flag `atrasado`) + `indicadores`. Campos aceitos: `CHECKLIST_CAMPOS_EDITAVEIS`; datas nunca vêm do cliente.
+  - `checklist_item_excluir.php` (`item_id`) → `indicadores`; 409 se o item estiver referenciado (preparado para a Fase 6).
+- **Model** `src/Models/checklist.php`:
+  - Constantes com os valores padronizados e rótulos (`CHECKLIST_RESULTADOS`, `CHECKLIST_STATUS_NC`, `CHECKLIST_STATUS_NC_ENCERRADOS`), limites (`CHECKLIST_ITENS_MAX = 500`, descrição/ação 1000, responsável 150).
+  - **Regras em funções puras**: `checklist_categoria_item()` e `checklist_indicadores()` (fórmula de aderência — espelhadas em `categoriaItem()` no JS) e `checklist_aplicar_alteracao()` (todas as transições de NC). `checklist_item_atrasado()`.
+  - `checklist_adicionar_item()` em transação com `SELECT ... FOR UPDATE` no checklist para que adições simultâneas não repitam número.
+  - `checklist_item_do_membro()` (autorização por item), `checklist_salvar_item()`, `checklist_excluir_item()`, `checklist_item_para_json()`.
+- **View helper** `src/Views/abas/checklist_linha.php` (`checklist_linha_html()`), usado pela aba e pelo endpoint de adicionar.
+- **Front**: `public/js/checklist.js`, `public/css/checklist.css`.
+
+#### Arquivos da Fase 5
+
+- **Criados**: `src/Models/checklist.php`, `src/Controllers/{checklist_item_adicionar,checklist_item_atualizar,checklist_item_excluir}.php`, `src/Views/abas/checklist.php`, `src/Views/abas/checklist_linha.php`, `public/js/checklist.js`, `public/css/checklist.css`.
+- **Alterados**: `src/Views/projeto.php` (carrega dados/CSS/JS da aba Checklist).
+
+#### Testes realizados (dados de teste apagados ao final)
+
+Todos passaram, sem erros/warnings no log do PHP.
+- **Regras (PHP CLI, 20 verificações)**: exemplo da planilha (48 Sim, 6 Não, 1 N/A) → NT 55, NTA 54, NC 48, NNC 6, **88,89%**; resolvida = conformidade, fechada por exceção = não aplicável, pendente/escalonada/não resolvida = NNC; NTA 0 → "—"; marcar NC grava identificação + `pendente` (remarcar não muda a data); Alta 24 h / Média 3 dias calculadas a partir da identificação (trocar a classificação recalcula); limpar classificação limpa a prevista; classificação de outro projeto ou valor não numérico → erro; `resolvida`/`fechada_por_excecao` gravam conclusão (passar de uma para a outra mantém a data original) e voltar a status aberto limpa; sair de NC limpa os 8 campos de NC; campos de NC em item não-NC, status/resultado fora da lista, descrição vazia/longa e campo não editável → erro; atraso só para NC aberta com prazo vencido.
+- **HTTP (criador, membro e não membro)**: aba vazia (aderência "—", checklist só é criado no 1º item); adicionar (sem CSRF 403, não membro 404, descrição vazia 400, HTML escapado no `item_html`, membro também adiciona); fluxo de NC completo com horário de Brasília; indicadores corretos em cada resposta (cenário misto → 75%; trocar para resolvida → 100%); página renderiza indicadores, linhas de NC e campos desabilitados; item atrasado destacado; excluir (não membro 404, membro 200 com indicadores); **60 adições simultâneas sem número repetido**; limite de 500 itens (501º → 409) e aba com 500 itens carregando em ~16 ms; **excluir projeto com item usando classificação funciona** (CASCADE apaga checklist, itens e classificações, sem órfãos).
+- **Schema (MySQL descartável)**: CHECK impede status/identificação de NC em item não-NC; ENUM rejeita status fora da lista; UNIQUE impede número repetido e 2º checklist; RESTRICT impede apagar classificação em uso.
+
+**Não testado ainda**: interface no navegador real.
+
+#### Pendências conhecidas da Fase 5
+
+- (Opcional, limpeza) remover o índice redundante `uk_checklists_projeto_nome` de `checklists` (ver acima).
+- Ao excluir o **último** item, o próximo item novo reutiliza aquele número ("maior + 1"). Números de itens existentes nunca mudam. Se for preciso nunca reutilizar, será necessário um contador em `checklists` (mudança de schema).
+- O status `escalonada` já pode ser escolhido manualmente, mas `data_escalonamento` e o histórico de escalonamento só serão preenchidos pelo fluxo da Fase 7.
+- A partir da Fase 6: bloquear a saída de "Não conformidade" (e a exclusão do item) quando a NC já tiver sido enviada por e-mail.
+- Nome do checklist fixo (`Checklist de Qualidade`), sem tela para editar.
+- Importar/copiar itens de um modelo ou de outro projeto.
+- Edição simultânea do mesmo campo: vale o último salvamento.
+
+
+### Estrutura real de arquivos (após a Fase 5)
 
 ```
 config/                 bootstrap incluído por tudo (bloqueado na web)
@@ -235,19 +329,23 @@ config/                 bootstrap incluído por tudo (bloqueado na web)
 src/Models/             acesso a dados (bloqueado na web)
   projetos.php          projetos + membros + classificações padrão
   pgq.php               PGQ e sub-tabelas (seções 2, 3, 4)
+  checklist.php         checklist, itens, regras de NC e fórmula de aderência
   classificacoes_nc.php leitura das classificações (Fase 8 vai estender)
 src/Controllers/        endpoints (JSON, exceto logoff)
   login_backend.php, cadastrar_backend.php, logoff.php
   projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php
   pgq_salvar.php
+  checklist_item_adicionar.php, checklist_item_atualizar.php, checklist_item_excluir.php
 src/Views/              páginas
   login.php, cadastro.php
   menu.php              dashboard "Meus projetos"
   projeto.php           página do projeto com as 3 abas
   navbar.php            componente compartilhado
   abas/pgq.php          partial da aba PGQ
-public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js
-public/css/             login, cadastro, navbar, menu, projeto, pgq
+  abas/checklist.php    partial da aba Checklist
+  abas/checklist_linha.php  HTML de uma linha do checklist (aba + endpoint de adicionar)
+public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js, checklist.js
+public/css/             login, cadastro, navbar, menu, projeto, pgq, checklist
 docker/                 apache/zz-deepcheck.conf, php/deepcheck.ini (bloqueado na web)
 index.html, style.css   landing page estática
 ```
@@ -275,8 +373,14 @@ A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta origina
 - Edição simultânea: vale o último salvamento, sem aviso de conflito.
 - Edição das classificações/prazos da seção 6 → **Fase 8**.
 
+**Checklist (Fase 5)**
+- (Opcional, limpeza) remover o índice redundante `uk_checklists_projeto_nome` de `checklists` — ver "Fase 5".
+- Excluir o último item faz o próximo reutilizar o número.
+- `data_escalonamento` e histórico de escalonamento → **Fase 7**; bloqueio de alterações em NC já enviada → **Fase 6**.
+- Nome do checklist fixo; importar/copiar itens de modelo; edição simultânea sem aviso de conflito.
+
 **Banco (próximas fases)**
-- Criar `checklists`, `checklist_itens` (Fase 5) e `nao_conformidades`, `nc_escalonamentos`, `nc_emails_enviados` (Fases 6/7) — SQL proposto pelo Claude Code, aplicado pelo desenvolvedor no Workbench.
+- Criar `nao_conformidades`, `nc_escalonamentos`, `nc_emails_enviados` (Fases 6/7) — SQL proposto pelo Claude Code, aplicado pelo desenvolvedor no Workbench.
 - FKs para `classificacoes_nc` devem ser RESTRICT; as demais filhas de `projetos` devem ser CASCADE (senão a exclusão de projeto retorna 409).
 
 ---
@@ -380,23 +484,30 @@ classificacoes_nc (
   prazo_unidade ENUM('horas','dias') NOT NULL
 )
 
--- Checklist de Qualidade
+-- Checklist de Qualidade (1 por projeto)
 checklists (
-  id, projeto_id (FK), nome, criado_em
+  id INT UNSIGNED AUTO_INCREMENT PK,
+  projeto_id INT UNSIGNED NOT NULL,   -- UNIQUE uk_checklists_projeto; fk_checklists_projeto → projetos.id CASCADE
+  nome VARCHAR(150) NOT NULL,
+  criado_em, atualizado_em
 )
 
 checklist_itens (
-  id, checklist_id (FK),
-  numero_item, descricao,
-  resultado (enum: 'conforme','nao_conformidade','nao_se_aplica', nullable),
-    -- nullable = item ainda não avaliado (usado no cálculo de aderência como "NA")
-  responsavel_resolucao,
-  classificacao_nc_id (FK classificacoes_nc.id, nullable),
-  acao_corretiva_indicada,
-  data_identificacao_nc (datetime, nullable),
-  data_prevista_resolucao (datetime, nullable),
-  data_conclusao_nc (datetime, nullable),
-  status_nc (enum: 'pendente','resolvida','nao_resolvida','escalonada', nullable)
+  id INT UNSIGNED AUTO_INCREMENT PK,
+  checklist_id INT UNSIGNED NOT NULL,         -- fk_checklist_itens_checklist → checklists.id CASCADE
+  numero_item SMALLINT UNSIGNED NOT NULL,     -- UNIQUE (checklist_id, numero_item); estável, não renumera
+  descricao VARCHAR(1000) NOT NULL,
+  resultado ENUM('conforme','nao_conformidade','nao_se_aplica') NULL,  -- NULL = não avaliado
+  data_identificacao_nc DATETIME NULL,
+  responsavel_resolucao VARCHAR(150) NULL,
+  classificacao_nc_id INT UNSIGNED NULL,      -- fk_checklist_itens_classificacao → classificacoes_nc.id RESTRICT
+  acao_corretiva_indicada VARCHAR(1000) NULL,
+  data_prevista_resolucao DATETIME NULL,
+  data_escalonamento DATETIME NULL,           -- coluna do template; preenchida na Fase 7
+  data_conclusao_nc DATETIME NULL,
+  status_nc ENUM('pendente','resolvida','nao_resolvida','escalonada','fechada_por_excecao') NULL,
+  criado_em, atualizado_em
+  -- CHECK chk_checklist_itens_nc_consistente: data_identificacao_nc e status_nc só com resultado = 'nao_conformidade'
 )
 
 -- Não Conformidades (gerada a partir de um checklist_item marcado como "nao_conformidade")
@@ -406,7 +517,7 @@ nao_conformidades (
   responsavel_resolucao, responsavel_qa,
   data_primeira_solicitacao, prazo_resolucao,
   numero_escalonamento (int, default 0),
-  status (enum: 'pendente','resolvida','nao_resolvida','escalonada'),
+  status (enum: 'pendente','resolvida','nao_resolvida','escalonada','fechada_por_excecao'),
   observacoes,
   criado_em, atualizado_em
 )
@@ -446,21 +557,38 @@ Ajustar tipos/nomes ao padrão já usado no restante do banco existente.
 - `resolvida`
 - `nao_resolvida`
 - `escalonada`
+- `fechada_por_excecao` *(adicionado pelo desenvolvedor em 2026-09-25 — equivale ao "Fechamento por Exceção" do template do checklist)*
 
 Não usar sinônimos ou valores alternativos (ex: `sim`/`nao`, `aberta`, `concluida`, `em_resolucao`) em nenhuma parte do código, banco ou interface — manter os nomes acima em todo lugar (colunas do banco, valores de `<select>`, respostas de API, labels visuais podem traduzir para exibição, mas o valor armazenado é sempre um destes).
 
 ### 1. Cálculo de Aderência (Checklist)
 Recalcular a cada alteração de item, em tempo real (via JS + confirmação no backend):
 
+**Regra corrigida em 2026-09-25** (confirmada pelo desenvolvedor), seguindo as fórmulas reais da planilha `Modelo Checklist - Processo de Qualidade 1.2.xlsx` (`NTA = NT − (NA + não aplicáveis)`, `Aderência = Sim / NTA`) + regra de status de NC definida pelo desenvolvedor. A versão anterior deste texto dizia que "não se aplica" entrava no NTA, o que divergia da planilha (exemplo da planilha: 48 Sim, 6 Não, 1 N/A → **88,89%**, e não 89,09%).
+
+Cada item é classificado assim:
+
+| `resultado` | `status_nc` | Conta como |
+|---|---|---|
+| `NULL` | — | **NA** (não avaliado) |
+| `nao_se_aplica` | — | **NNA** (não aplicável) |
+| `conforme` | — | conformidade |
+| `nao_conformidade` | `resolvida` | **conformidade** (NC corrigida) |
+| `nao_conformidade` | `fechada_por_excecao` | **NNA** (funciona como "não se aplica") |
+| `nao_conformidade` | `pendente`, `escalonada`, `nao_resolvida` | **NNC** (não conformidade) |
+
 ```
 NT   = total de itens do checklist
-NA   = itens ainda não avaliados (resultado = NULL, item pendente de resposta)
-NTA  = NT - NA
-NNC  = itens com resultado = "nao_conformidade"
+NA   = itens não avaliados
+NNA  = itens não aplicáveis (nao_se_aplica + NCs fechadas por exceção)
+NTA  = NT - NA - NNA
+NNC  = não conformidades em aberto (pendente, escalonada, nao_resolvida)
 NC   = NTA - NNC
-% Aderência = (NC / NTA) * 100
+% Aderência = (NC / NTA) * 100     (NTA = 0 → aderência não se aplica, exibir "—")
 ```
-Itens com resultado = "nao_se_aplica" contam como avaliados (entram no NTA), mas não entram no denominador de conformidade (seguir o mesmo tratamento do checklist de referência: NT - NA = NTA, e NNC é contado sobre os itens "nao_conformidade").
+Exibir também o total de não aplicáveis (NNA), como a planilha faz.
+
+*Confirmado pelo desenvolvedor (2026-09-25)*: `nao_resolvida` conta como não conformidade, como `pendente`/`escalonada`.
 
 ### 2. Classificação e Prazo de NC
 - Definidas por projeto em `classificacoes_nc` (configurável pelo usuário no PGQ, seção 6).
@@ -553,7 +681,7 @@ Recomenda-se a fila assíncrona se o volume de e-mails crescer, mas a síncrona 
 2. **Fase 2 — Modelo de dados** 🟡 *(parcial em 2026-09-25: `projetos`, `projeto_membros`, `classificacoes_nc` criadas — ver "Fase 2 — parcial"; demais tabelas são criadas junto com a fase que as usa)*: desenvolvedor cria/ajusta as tabelas manualmente no MySQL Workbench, seguindo o schema acima como base; Claude Code apenas valida se os nomes usados no código batem com o que foi criado.
 3. **Fase 3 — Dashboard de projetos** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 3 — Dashboard de Projetos")*: CRUD de projetos (criar, editar nome, apagar) + tela de acesso via ID/senha do projeto.
 4. **Fase 4 — Aba PGQ** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 4 — Aba PGQ")*: formulário completo baseado no template, com sub-tabelas dinâmicas (documentos, itens avaliados, plano de avaliações).
-5. **Fase 5 — Aba Checklist**: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
+5. **Fase 5 — Aba Checklist** ✅ *(concluída e testada via HTTP em 2026-09-25 — ver "Fase 5 — Aba Checklist"; falta validar no navegador)*: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
 6. **Fase 6 — Fluxo de e-mail de NC**: formulário de envio, integração com script Python, template de comunicação.
 7. **Fase 7 — Aba Não Conformidades**: listagem, status, histórico, ação de escalonamento (reaproveitando o fluxo de e-mail da Fase 6 com campos extras).
 8. **Fase 8 — Configuração de classificações/prazos por projeto**: tela para o usuário definir "Simples/Média/Alta" e seus prazos, usada pelas Fases 5 e 7.

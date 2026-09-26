@@ -35,6 +35,14 @@
         $pgq = pgq_do_projeto($conexao, $projetoId);
         $classificacoes = classificacoes_do_projeto($conexao, $projetoId);
         $arquivosAba = ['css' => '/public/css/pgq.css', 'js' => '/public/js/pgq.js'];
+    } elseif ($abaAtual === 'checklist') {
+        require_once __DIR__ . '/../Models/checklist.php';
+        require_once __DIR__ . '/../Models/classificacoes_nc.php';
+        $checklist = checklist_do_projeto($conexao, $projetoId);
+        $itens = $checklist ? checklist_itens($conexao, $checklist['id']) : [];
+        $classificacoes = classificacoes_do_projeto($conexao, $projetoId);
+        $indicadores = checklist_indicadores($itens);
+        $arquivosAba = ['css' => '/public/css/checklist.css', 'js' => '/public/js/checklist.js'];
     }
     $conexao->close();
 ?>
@@ -73,6 +81,8 @@
             <h2><?= e($abas[$abaAtual]['titulo']) ?></h2>
             <?php if ($abaAtual === 'pgq'): ?>
                 <?php include __DIR__ . '/abas/pgq.php'; ?>
+            <?php elseif ($abaAtual === 'checklist'): ?>
+                <?php include __DIR__ . '/abas/checklist.php'; ?>
             <?php else: ?>
                 <p class="em-construcao">Esta aba será implementada na Fase <?= $abas[$abaAtual]['fase'] ?>.</p>
             <?php endif; ?>

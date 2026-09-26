@@ -1,0 +1,147 @@
+.checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.checklist-indicadores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.75rem;
+}
+
+.indicador {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.indicador span {
+    color: #555;
+    font-size: 0.8rem;
+}
+
+.indicador strong {
+    font-size: 1.4rem;
+}
+
+.indicador-destaque {
+    border-color: #2e7d32;
+}
+
+.dica {
+    margin: 0;
+    color: #555;
+    font-size: 0.85rem;
+}
+
+.mensagem {
+    min-height: 1.2em;
+    margin: 0;
+}
+
+.mensagem-erro {
+    color: #c62828;
+}
+
+.mensagem-sucesso {
+    color: #2e7d32;
+}
+
+.tabela-rolagem {
+    overflow-x: auto;
+}
+
+.checklist-tabela {
+    width: 100%;
+    min-width: 1400px;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.checklist-tabela th,
+.checklist-tabela td {
+    padding: 0.3rem;
+    border: 1px solid #ddd;
+    text-align: left;
+    vertical-align: top;
+}
+
+.checklist-tabela thead th {
+    background: #eee;
+    font-size: 0.8rem;
+}
+
+.checklist-tabela textarea,
+.checklist-tabela input,
+.checklist-tabela select {
+    box-sizing: border-box;
+    width: 100%;
+    font: inherit;
+}
+
+.checklist-tabela textarea {
+    resize: vertical;
+}
+
+.checklist-tabela td:nth-child(2) {
+    min-width: 260px;
+}
+
+.checklist-tabela td:nth-child(7) {
+    min-width: 200px;
+}
+
+.col-numero {
+    width: 2.5rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+.col-data {
+    white-space: nowrap;
+}
+
+.item-nc {
+    background: #fff4f4;
+}
+
+.item-atrasado .col-data[data-exibe="data_prevista_resolucao"] {
+    color: #c62828;
+    font-weight: 600;
+}
+
+.botao-perigo {
+    color: #c62828;
+}
+
+.checklist-novo-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-width: 700px;
+}
+
+.checklist-novo-item textarea {
+    font: inherit;
+}
+
+.checklist-novo-item button {
+    align-self: flex-start;
+}
+
+.vazio {
+    color: #555;
+}
+
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
