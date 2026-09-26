@@ -2,7 +2,7 @@
 // Navbar compartilhada por todas as telas autenticadas.
 // A página que a inclui já deve ter carregado config/auth.php e chamado exigir_login().
 ?>
-<link rel="stylesheet" href="/public/css/navbar.css">
+<link rel="stylesheet" href="<?= asset('/public/css/navbar.css') ?>">
 
 <header class="navbar">
     <div>

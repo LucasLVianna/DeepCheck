@@ -145,3 +145,71 @@
     clip-path: inset(50%);
     white-space: nowrap;
 }
+
+.checklist-tabela td:nth-child(12) {
+    min-width: 130px;
+}
+
+.nc-enviada {
+    color: #2e7d32;
+    font-size: 0.85rem;
+}
+
+.dialog-nc {
+    width: min(640px, calc(100vw - 2rem));
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.dialog-nc::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog-nc form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.dialog-nc h3 {
+    margin: 0;
+}
+
+.dialog-nc input,
+.dialog-nc textarea {
+    box-sizing: border-box;
+    width: 100%;
+    font: inherit;
+}
+
+.dialog-nc-resumo {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3rem 0.75rem;
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background: #f5f5f5;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.dialog-nc-resumo dt {
+    font-weight: 600;
+}
+
+.dialog-nc-resumo dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.dialog-nc-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.obrigatorio {
+    color: red;
+}

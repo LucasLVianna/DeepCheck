@@ -42,6 +42,8 @@
         $itens = $checklist ? checklist_itens($conexao, $checklist['id']) : [];
         $classificacoes = classificacoes_do_projeto($conexao, $projetoId);
         $indicadores = checklist_indicadores($itens);
+        require_once __DIR__ . '/../Models/pgq.php';
+        $responsavelQaPadrao = pgq_rq_nome($conexao, $projetoId) ?: $_SESSION['usuario']['nome'];
         $arquivosAba = ['css' => '/public/css/checklist.css', 'js' => '/public/js/checklist.js'];
     }
     $conexao->close();
@@ -54,9 +56,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title><?= e($projeto['nome']) ?> — DeepCheck</title>
-    <link rel="stylesheet" href="/public/css/projeto.css">
+    <link rel="stylesheet" href="<?= asset('/public/css/projeto.css') ?>">
     <?php if ($arquivosAba['css']): ?>
-        <link rel="stylesheet" href="<?= $arquivosAba['css'] ?>">
+        <link rel="stylesheet" href="<?= asset($arquivosAba['css']) ?>">
     <?php endif; ?>
 </head>
 <body>
@@ -90,8 +92,8 @@
     </main>
 
     <?php if ($arquivosAba['js']): ?>
-        <script src="/public/js/api.js"></script>
-        <script src="<?= $arquivosAba['js'] ?>"></script>
+        <script src="<?= asset('/public/js/api.js') ?>"></script>
+        <script src="<?= asset($arquivosAba['js']) ?>"></script>
     <?php endif; ?>
 </body>
 </html>

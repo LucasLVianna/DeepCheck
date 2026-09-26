@@ -147,6 +147,14 @@ function exigir_post_com_csrf(): void
     }
 }
 
+// Caminho de um arquivo de public/ com a versão (data de modificação) na URL, já escapado
+// para HTML. Quando o arquivo muda, a URL muda e o navegador não usa a cópia antiga do cache.
+function asset(string $caminho): string
+{
+    $arquivo = __DIR__ . '/..' . $caminho;
+    return e($caminho . '?v=' . (is_file($arquivo) ? filemtime($arquivo) : '0'));
+}
+
 // Escapa texto para saída em HTML (conteúdo e atributos).
 function e(?string $texto): string
 {

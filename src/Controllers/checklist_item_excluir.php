@@ -17,11 +17,15 @@ if ($item === null) {
     $conexao->close();
     responder_json(['status' => 'nok', 'mensagem' => 'Item não encontrado.'], 404);
 }
+if (!empty($item['nc_id'])) {
+    $conexao->close();
+    responder_json(['status' => 'nok', 'mensagem' => 'Este item tem uma NC enviada por e-mail e não pode ser excluído.'], 409);
+}
 
 try {
     checklist_excluir_item($conexao, $itemId);
 } catch (mysqli_sql_exception $e) {
-    // 1451: a partir da Fase 6, uma NC enviada (nao_conformidades) passa a referenciar o item.
+    // 1451: NC enviada criada entre a verificação acima e o DELETE (FK RESTRICT).
     error_log('DeepCheck: falha ao excluir item ' . $itemId . ' do checklist: ' . $e->getMessage());
     $conexao->close();
     responder_json([

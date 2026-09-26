@@ -30,9 +30,15 @@ const CHECKLIST_STATUS_NC_ENCERRADOS = ['resolvida', 'fechada_por_excecao'];
 const CHECKLIST_CAMPOS_EDITAVEIS = ['descricao', 'resultado', 'responsavel_resolucao', 'classificacao_nc_id', 'acao_corretiva_indicada', 'status_nc'];
 const CHECKLIST_CAMPOS_NC = ['responsavel_resolucao', 'classificacao_nc_id', 'acao_corretiva_indicada', 'status_nc'];
 
+// Depois que a NC é enviada por e-mail, só o status continua editável no checklist.
+const CHECKLIST_CAMPOS_TRAVADOS_APOS_ENVIO = ['descricao', 'resultado', 'responsavel_resolucao', 'classificacao_nc_id', 'acao_corretiva_indicada'];
+
+// Colunas do item + a NC enviada (nao_conformidades), se houver. Usar com CHECKLIST_FROM_ITEM.
 const CHECKLIST_COLUNAS_ITEM = 'i.id, i.checklist_id, i.numero_item, i.descricao, i.resultado, i.data_identificacao_nc,
     i.responsavel_resolucao, i.classificacao_nc_id, i.acao_corretiva_indicada, i.data_prevista_resolucao,
-    i.data_escalonamento, i.data_conclusao_nc, i.status_nc';
+    i.data_escalonamento, i.data_conclusao_nc, i.status_nc,
+    nc.id AS nc_id, nc.data_primeira_solicitacao AS nc_enviada_em';
+const CHECKLIST_FROM_ITEM = 'checklist_itens i LEFT JOIN nao_conformidades nc ON nc.checklist_item_id = i.id';
 
 // Como o item entra no cálculo de aderência:
 // 'na' não avaliado | 'nna' não aplicável | 'conforme' | 'nnc' não conformidade em aberto.
@@ -77,6 +83,64 @@ function checklist_indicadores(array $itens): array
     ];
 }
 
+// Data prevista de resolução ('aaaa-mm-dd hh:mm:ss') sem contar sábados e domingos.
+// Dias: conta a partir do dia seguinte à identificação, só dias úteis; vale até o fim do
+// dia (23:59:59). Horas: conta a partir da identificação, sem as horas de fim de semana.
+function checklist_calcular_prevista(string $identificacao, array $classificacao): string
+{
+    $quantidade = (int) $classificacao['prazo_valor'];
+    $data = new DateTimeImmutable($identificacao);
+    $fimDeSemana = fn(DateTimeImmutable $d) => (int) $d->format('N') >= 6;
+
+    if ($classificacao['prazo_unidade'] === 'dias') {
+        $data = $data->setTime(0, 0);
+        while ($quantidade > 0) {
+            $data = $data->modify('+1 day');
+            if (!$fimDeSemana($data)) {
+                $quantidade--;
+            }
+        }
+        return $data->setTime(23, 59, 59)->format('Y-m-d H:i:s');
+    }
+
+    $restante = $quantidade * 3600;
+    while ($fimDeSemana($data)) {
+        $data = $data->setTime(0, 0)->modify('+1 day');
+    }
+    while (true) {
+        $proximoDia = $data->setTime(0, 0)->modify('+1 day');
+        $disponivel = $proximoDia->getTimestamp() - $data->getTimestamp();
+        if ($restante <= $disponivel) {
+            return $data->modify("+{$restante} seconds")->format('Y-m-d H:i:s');
+        }
+        $restante -= $disponivel;
+        $data = $proximoDia;
+        while ($fimDeSemana($data)) {
+            $data = $data->modify('+1 day');
+        }
+    }
+}
+
+// Prazo em dias vale até o fim do dia (23:59:59) e é exibido só com a data.
+function checklist_formatar_prazo(?string $data): string
+{
+    if ($data === null) {
+        return '';
+    }
+    return date(str_ends_with($data, '23:59:59') ? 'd/m/Y' : 'd/m/Y H:i', strtotime($data));
+}
+
+// Item pronto para enviar a Solicitação de Resolução: NC ainda não enviada, com
+// classificação (e portanto data prevista) e responsável preenchidos.
+function checklist_item_pode_enviar(array $item): bool
+{
+    return $item['resultado'] === 'nao_conformidade'
+        && empty($item['nc_id'])
+        && $item['classificacao_nc_id'] !== null
+        && $item['data_prevista_resolucao'] !== null
+        && trim((string) $item['responsavel_resolucao']) !== '';
+}
+
 // NC aberta com o prazo de resolução vencido.
 function checklist_item_atrasado(array $item): bool
 {
@@ -100,7 +164,7 @@ function checklist_itens(mysqli $conexao, int $checklistId): array
 {
     $stmt = $conexao->prepare(
         "SELECT " . CHECKLIST_COLUNAS_ITEM . "
-           FROM checklist_itens i
+           FROM " . CHECKLIST_FROM_ITEM . "
           WHERE i.checklist_id = ?
           ORDER BY i.numero_item"
     );
@@ -116,7 +180,7 @@ function checklist_item_do_membro(mysqli $conexao, int $itemId, int $usuarioId):
 {
     $stmt = $conexao->prepare(
         "SELECT " . CHECKLIST_COLUNAS_ITEM . ", c.projeto_id
-           FROM checklist_itens i
+           FROM " . CHECKLIST_FROM_ITEM . "
            JOIN checklists c ON c.id = i.checklist_id
            JOIN projeto_membros m ON m.projeto_id = c.projeto_id AND m.usuario_id = ?
           WHERE i.id = ?"
@@ -186,7 +250,7 @@ function checklist_adicionar_item(mysqli $conexao, int $projetoId, string $descr
         throw $e;
     }
 
-    $stmt = $conexao->prepare("SELECT " . CHECKLIST_COLUNAS_ITEM . " FROM checklist_itens i WHERE i.id = ?");
+    $stmt = $conexao->prepare("SELECT " . CHECKLIST_COLUNAS_ITEM . " FROM " . CHECKLIST_FROM_ITEM . " WHERE i.id = ?");
     $stmt->bind_param("i", $itemId);
     $stmt->execute();
     $item = $stmt->get_result()->fetch_assoc();
@@ -201,6 +265,10 @@ function checklist_aplicar_alteracao(array $item, string $campo, string $valor, 
 {
     $valor = trim($valor);
     $ehNc = $item['resultado'] === 'nao_conformidade';
+
+    if (!empty($item['nc_id']) && in_array($campo, CHECKLIST_CAMPOS_TRAVADOS_APOS_ENVIO, true)) {
+        return ['erro' => 'Esta NC já foi enviada por e-mail: só o status pode ser alterado.'];
+    }
 
     if (in_array($campo, CHECKLIST_CAMPOS_NC, true) && !$ehNc) {
         return ['erro' => 'Marque o item como não conformidade para preencher os dados da NC.'];
@@ -256,11 +324,8 @@ function checklist_aplicar_alteracao(array $item, string $campo, string $valor, 
             if ($classificacao === null || (string) (int) $valor !== $valor) {
                 return ['erro' => 'Classificação inválida.'];
             }
-            // Data prevista = identificação da NC + prazo da classificação.
-            $prevista = new DateTime($item['data_identificacao_nc']);
-            $prevista->modify('+' . (int) $classificacao['prazo_valor'] . ($classificacao['prazo_unidade'] === 'dias' ? ' days' : ' hours'));
             $item['classificacao_nc_id'] = (int) $valor;
-            $item['data_prevista_resolucao'] = $prevista->format('Y-m-d H:i:s');
+            $item['data_prevista_resolucao'] = checklist_calcular_prevista($item['data_identificacao_nc'], $classificacao);
             break;
 
         case 'status_nc':
@@ -283,7 +348,26 @@ function checklist_aplicar_alteracao(array $item, string $campo, string $valor, 
     return ['item' => $item];
 }
 
+// Grava o item e, se a NC já foi enviada, replica o status em nao_conformidades.
 function checklist_salvar_item(mysqli $conexao, array $item): void
+{
+    $conexao->begin_transaction();
+    try {
+        checklist_gravar_item($conexao, $item);
+        if (!empty($item['nc_id'])) {
+            $stmt = $conexao->prepare("UPDATE nao_conformidades SET status = ? WHERE id = ?");
+            $stmt->bind_param("si", $item['status_nc'], $item['nc_id']);
+            $stmt->execute();
+            $stmt->close();
+        }
+        $conexao->commit();
+    } catch (Throwable $e) {
+        $conexao->rollback();
+        throw $e;
+    }
+}
+
+function checklist_gravar_item(mysqli $conexao, array $item): void
 {
     $stmt = $conexao->prepare(
         "UPDATE checklist_itens
@@ -332,9 +416,12 @@ function checklist_item_para_json(array $item): array
         'acao_corretiva_indicada' => $item['acao_corretiva_indicada'] ?? '',
         'status_nc'               => $item['status_nc'] ?? '',
         'data_identificacao_nc'   => $formatar($item['data_identificacao_nc']),
-        'data_prevista_resolucao' => $formatar($item['data_prevista_resolucao']),
+        'data_prevista_resolucao' => checklist_formatar_prazo($item['data_prevista_resolucao']),
         'data_escalonamento'      => $formatar($item['data_escalonamento']),
         'data_conclusao_nc'       => $formatar($item['data_conclusao_nc']),
         'atrasado'                => checklist_item_atrasado($item),
+        'nc_enviada'              => !empty($item['nc_id']),
+        'nc_enviada_em'           => $formatar($item['nc_enviada_em'] ?? null),
+        'pode_enviar'             => checklist_item_pode_enviar($item),
     ];
 }

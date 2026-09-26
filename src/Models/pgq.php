@@ -25,7 +25,12 @@ const PGQ_CAMPOS_DATA = [
     'data_comprometimento_responsavel' => 'Data do Responsável pelo Projeto',
     'data_comprometimento_rq'          => 'Data do RQ',
 ];
-// data_documento (capa) é mês/ano: chega como "aaaa-mm" e é gravada como o dia 1 do mês.
+// data_documento (capa) é mês/ano: chega em duas listas (data_documento_mes e
+// data_documento_ano) e é gravada como o dia 1 do mês.
+const PGQ_MESES = [
+    1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 => 'Maio', 6 => 'Junho',
+    7 => 'Julho', 8 => 'Agosto', 9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro',
+];
 
 // Sub-tabelas: chave usada no formulário => tabela e colunas (na ordem do template).
 const PGQ_SUBTABELAS = [
@@ -95,10 +100,19 @@ function pgq_ler_entrada(array $post): array
         }
     }
 
-    $mesAno = pgq_texto($post['data_documento'] ?? '');
-    $campos['data_documento'] = $mesAno === '' ? null : pgq_data_iso($mesAno, 'Y-m');
-    if ($mesAno !== '' && $campos['data_documento'] === null) {
-        return ['erro' => 'Mês/ano da capa inválido.'];
+    $mes = pgq_texto($post['data_documento_mes'] ?? '');
+    $ano = pgq_texto($post['data_documento_ano'] ?? '');
+    if (($mes === '') !== ($ano === '')) {
+        return ['erro' => 'Capa: selecione o mês e o ano (ou deixe os dois em branco).'];
+    }
+    $campos['data_documento'] = null;
+    if ($mes !== '') {
+        $campos['data_documento'] = ctype_digit($mes) && ctype_digit($ano)
+            ? pgq_data_iso(sprintf('%04d-%02d', (int) $ano, (int) $mes), 'Y-m')
+            : null;
+        if ($campos['data_documento'] === null) {
+            return ['erro' => 'Mês/ano da capa inválido.'];
+        }
     }
 
     $linhas = [];
@@ -226,4 +240,15 @@ function pgq_salvar(mysqli $conexao, int $projetoId, array $campos, array $linha
     }
 
     return $atualizadoEm;
+}
+
+// Nome do RQ (Representante da Qualidade) do PGQ do projeto, se preenchido.
+function pgq_rq_nome(mysqli $conexao, int $projetoId): ?string
+{
+    $stmt = $conexao->prepare("SELECT rq_nome FROM pgq WHERE projeto_id = ?");
+    $stmt->bind_param("i", $projetoId);
+    $stmt->execute();
+    $linha = $stmt->get_result()->fetch_row();
+    $stmt->close();
+    return $linha[0] ?? null;
 }

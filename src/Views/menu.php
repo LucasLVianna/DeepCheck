@@ -16,7 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Meus projetos — DeepCheck</title>
-    <link rel="stylesheet" href="/public/css/menu.css">
+    <link rel="stylesheet" href="<?= asset('/public/css/menu.css') ?>">
 </head>
 <body>
     <?php include __DIR__ . '/navbar.php'; ?>
@@ -87,7 +87,7 @@
         </section>
     </main>
 
-    <script src="/public/js/api.js"></script>
-    <script src="/public/js/menu.js"></script>
+    <script src="<?= asset('/public/js/api.js') ?>"></script>
+    <script src="<?= asset('/public/js/menu.js') ?>"></script>
 </body>
 </html>

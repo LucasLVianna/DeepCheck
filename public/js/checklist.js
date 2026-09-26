@@ -62,8 +62,13 @@ function aplicarItem(linha, item) {
             campo.value = item[nome];
             marcarComoSalvo(campo);
         }
-        if (CAMPOS_NC.includes(nome)) {
+        // Campos de NC só em item NC; depois do envio da NC, só o status continua editável.
+        if (nome === 'status_nc') {
             campo.disabled = item.resultado !== 'nao_conformidade';
+        } else if (CAMPOS_NC.includes(nome)) {
+            campo.disabled = item.resultado !== 'nao_conformidade' || item.nc_enviada;
+        } else {
+            campo.disabled = item.nc_enviada;
         }
     }
     for (const celula of linha.querySelectorAll('[data-exibe]')) {
@@ -71,6 +76,21 @@ function aplicarItem(linha, item) {
     }
     linha.classList.toggle('item-nc', item.resultado === 'nao_conformidade');
     linha.classList.toggle('item-atrasado', item.atrasado);
+    atualizarSolicitacao(linha, item);
+}
+
+// Célula "Solicitação de resolução": botão "Enviar NC" ou a data do envio.
+function atualizarSolicitacao(linha, item) {
+    const celula = linha.querySelector('.col-solicitacao');
+    if (item.nc_enviada) {
+        const enviada = document.createElement('span');
+        enviada.className = 'nc-enviada';
+        enviada.textContent = `Enviada em ${item.nc_enviada_em}`;
+        celula.replaceChildren(enviada);
+    } else {
+        celula.querySelector('.js-enviar-nc').disabled = !item.pode_enviar;
+    }
+    linha.querySelector('.js-excluir-item').disabled = item.nc_enviada;
 }
 
 function temDadosDeNc(linha) {
@@ -172,6 +192,60 @@ formNovoItem.addEventListener('submit', async (event) => {
     mostrarStatus('Item adicionado.', true);
     descricao.value = '';
     descricao.focus();
+});
+
+// --- Envio da Solicitação de Resolução de Não Conformidade ---
+const dialogNc = document.getElementById('dialogEnviarNc');
+const formNc = document.getElementById('formEnviarNc');
+const mensagemNc = document.getElementById('mensagemEnviarNc');
+let linhaEnvio = null;
+
+corpoItens.addEventListener('click', (event) => {
+    const botao = event.target.closest('.js-enviar-nc');
+    if (!botao) return;
+    linhaEnvio = botao.closest('tr');
+    const valor = (campo) => linhaEnvio.querySelector(`[data-campo="${campo}"]`);
+
+    document.getElementById('ncItem').textContent = linhaEnvio.querySelector('.col-numero').textContent;
+    document.getElementById('ncResponsavel').textContent = valor('responsavel_resolucao').value;
+    document.getElementById('ncPrazo').textContent = linhaEnvio.querySelector('[data-exibe="data_prevista_resolucao"]').textContent;
+    document.getElementById('ncDescricao').textContent = valor('descricao').value;
+    document.getElementById('ncClassificacao').textContent = valor('classificacao_nc_id').selectedOptions[0].textContent;
+    document.getElementById('ncAcao').textContent = valor('acao_corretiva_indicada').value || '—';
+
+    formNc.reset();
+    formNc.responsavel_qa.value = checklist.dataset.responsavelQa;
+    mensagemNc.textContent = '';
+    dialogNc.showModal();
+    formNc.email_responsavel.focus();
+});
+
+document.getElementById('cancelarEnviarNc').addEventListener('click', () => dialogNc.close());
+
+formNc.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const botao = document.getElementById('confirmarEnviarNc');
+    botao.disabled = true;
+    botao.textContent = 'Enviando...';
+    mensagemNc.classList.remove('mensagem-erro');
+    mensagemNc.textContent = 'Gerando o PDF e enviando o e-mail. Isso pode levar alguns segundos.';
+
+    // Garante que alterações da linha ainda em salvamento cheguem ao servidor antes do envio.
+    await (linhaEnvio.filaSalvamento || Promise.resolve());
+    const dados = new FormData(formNc);
+    dados.append('item_id', linhaEnvio.dataset.itemId);
+    const resposta = await enviarPost('/src/Controllers/nc_enviar.php', dados);
+
+    botao.disabled = false;
+    botao.textContent = 'Enviar e-mail';
+    if (resposta.status === 'ok') {
+        aplicarItem(linhaEnvio, resposta.item);
+        dialogNc.close();
+        mostrarStatus(resposta.mensagem, true);
+        return;
+    }
+    mensagemNc.classList.add('mensagem-erro');
+    mensagemNc.textContent = resposta.mensagem;
 });
 
 window.addEventListener('beforeunload', (event) => {

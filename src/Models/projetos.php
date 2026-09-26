@@ -173,11 +173,22 @@ function projeto_renomear(mysqli $conexao, int $projetoId, string $nome): void
     $stmt->close();
 }
 
-// Apaga o projeto; membros e classificações são removidos pelo ON DELETE CASCADE.
+// Apaga o projeto e tudo o que depende dele (ON DELETE CASCADE). As NCs enviadas são
+// apagadas antes, na mesma transação: nao_conformidades.checklist_item_id é RESTRICT
+// (impede excluir item com NC enviada) e bloquearia a cascata projetos → checklist_itens.
 function projeto_excluir(mysqli $conexao, int $projetoId): void
 {
-    $stmt = $conexao->prepare("DELETE FROM projetos WHERE id = ?");
-    $stmt->bind_param("i", $projetoId);
-    $stmt->execute();
-    $stmt->close();
+    $conexao->begin_transaction();
+    try {
+        foreach (["DELETE FROM nao_conformidades WHERE projeto_id = ?", "DELETE FROM projetos WHERE id = ?"] as $sql) {
+            $stmt = $conexao->prepare($sql);
+            $stmt->bind_param("i", $projetoId);
+            $stmt->execute();
+            $stmt->close();
+        }
+        $conexao->commit();
+    } catch (Throwable $e) {
+        $conexao->rollback();
+        throw $e;
+    }
 }

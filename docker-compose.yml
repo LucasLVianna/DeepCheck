@@ -33,6 +33,18 @@ services:
     networks:
       - deepcheck
 
+  # "Pega-e-mails" de desenvolvimento: recebe tudo o que o sistema envia por SMTP
+  # (mailpit:1025, só na rede interna) e mostra numa interface web, sem entregar
+  # nada de verdade. Interface: http://localhost:${MAILPIT_PORT:-8025}
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: deepcheck_mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - deepcheck
+
 networks:
   deepcheck:
 

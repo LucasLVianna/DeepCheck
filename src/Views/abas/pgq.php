@@ -42,9 +42,28 @@ function pgq_linha_html(string $chave, array $linha = []): string
             <label>Cidade
                 <input type="text" name="cidade" maxlength="<?= PGQ_CAMPOS_TEXTO['cidade']['max'] ?>" value="<?= e($dados['cidade'] ?? '') ?>">
             </label>
-            <label>Mês/ano
-                <input type="month" name="data_documento" value="<?= e(substr($dados['data_documento'] ?? '', 0, 7)) ?>">
-            </label>
+            <?php
+                // Mês e ano em duas listas: <input type="month"> não existe no Firefox nem no Safari.
+                $mesSalvo = isset($dados['data_documento']) ? (int) substr($dados['data_documento'], 5, 2) : 0;
+                $anoSalvo = isset($dados['data_documento']) ? (int) substr($dados['data_documento'], 0, 4) : 0;
+                $anoAtual = (int) date('Y');
+                $anos = range(min($anoAtual - 5, $anoSalvo ?: $anoAtual), max($anoAtual + 5, $anoSalvo));
+            ?>
+            <fieldset class="pgq-mes-ano">
+                <legend>Mês/ano</legend>
+                <select name="data_documento_mes" aria-label="Mês">
+                    <option value="">Mês</option>
+                    <?php foreach (PGQ_MESES as $numero => $nome): ?>
+                        <option value="<?= $numero ?>"<?= $numero === $mesSalvo ? ' selected' : '' ?>><?= $nome ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select name="data_documento_ano" aria-label="Ano">
+                    <option value="">Ano</option>
+                    <?php foreach ($anos as $ano): ?>
+                        <option value="<?= $ano ?>"<?= $ano === $anoSalvo ? ' selected' : '' ?>><?= $ano ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </fieldset>
         </div>
     </section>
 

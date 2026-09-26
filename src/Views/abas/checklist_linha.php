@@ -17,11 +17,25 @@ function checklist_opcoes_html(array $opcoes, string $selecionado, string $vazio
     return $html;
 }
 
+// Célula "Solicitação de resolução": data do envio ou botão para enviar.
+function checklist_solicitacao_html(array $dados): string
+{
+    if ($dados['nc_enviada']) {
+        return '<span class="nc-enviada">Enviada em ' . e($dados['nc_enviada_em']) . '</span>';
+    }
+    return '<button type="button" class="js-enviar-nc" title="Disponível para itens em não conformidade com classificação e responsável preenchidos"'
+        . ($dados['pode_enviar'] ? '' : ' disabled') . '>Enviar NC</button>';
+}
+
 function checklist_linha_html(array $item, array $classificacoes): string
 {
     $dados = checklist_item_para_json($item);
     $numero = $dados['numero_item'];
-    $bloqueado = $dados['resultado'] === 'nao_conformidade' ? '' : ' disabled';
+    $enviada = $dados['nc_enviada'];
+    // Campos de NC só valem em item NC; depois do envio da NC, só o status continua editável.
+    $travado = $enviada ? ' disabled' : '';
+    $bloqueado = $dados['resultado'] === 'nao_conformidade' && !$enviada ? '' : ' disabled';
+    $bloqueadoStatus = $dados['resultado'] === 'nao_conformidade' ? '' : ' disabled';
 
     $opcoesClassificacao = [];
     foreach ($classificacoes as $classificacao) {
@@ -34,8 +48,8 @@ function checklist_linha_html(array $item, array $classificacoes): string
 
     return '<tr class="' . $classes . '" data-item-id="' . $dados['id'] . '">'
         . '<td class="col-numero">' . $numero . '</td>'
-        . '<td><textarea data-campo="descricao" rows="2" maxlength="' . CHECKLIST_DESCRICAO_MAX . '" aria-label="Descrição do item ' . $numero . '">' . e($dados['descricao']) . '</textarea></td>'
-        . '<td><select data-campo="resultado" aria-label="Resultado do item ' . $numero . '">'
+        . '<td><textarea data-campo="descricao" rows="2" maxlength="' . CHECKLIST_DESCRICAO_MAX . '" aria-label="Descrição do item ' . $numero . '"' . $travado . '>' . e($dados['descricao']) . '</textarea></td>'
+        . '<td><select data-campo="resultado" aria-label="Resultado do item ' . $numero . '"' . $travado . '>'
             . checklist_opcoes_html(CHECKLIST_RESULTADOS, $dados['resultado'], '<option value="">Não avaliado</option>') . '</select></td>'
         . '<td class="col-data" data-exibe="data_identificacao_nc">' . e($dados['data_identificacao_nc']) . '</td>'
         . '<td><input type="text" data-campo="responsavel_resolucao" maxlength="' . CHECKLIST_RESPONSAVEL_MAX . '" value="' . e($dados['responsavel_resolucao']) . '" aria-label="Responsável pela resolução do item ' . $numero . '"' . $bloqueado . '></td>'
@@ -45,8 +59,9 @@ function checklist_linha_html(array $item, array $classificacoes): string
         . '<td class="col-data" data-exibe="data_prevista_resolucao">' . e($dados['data_prevista_resolucao']) . '</td>'
         . '<td class="col-data" data-exibe="data_escalonamento">' . e($dados['data_escalonamento']) . '</td>'
         . '<td class="col-data" data-exibe="data_conclusao_nc">' . e($dados['data_conclusao_nc']) . '</td>'
-        . '<td><select data-campo="status_nc" aria-label="Status da NC do item ' . $numero . '"' . $bloqueado . '>'
+        . '<td><select data-campo="status_nc" aria-label="Status da NC do item ' . $numero . '"' . $bloqueadoStatus . '>'
             . checklist_opcoes_html(CHECKLIST_STATUS_NC, $dados['status_nc'], '<option value="" disabled' . ($dados['status_nc'] === '' ? ' selected' : '') . '>—</option>') . '</select></td>'
-        . '<td><button type="button" class="js-excluir-item botao-perigo" aria-label="Excluir item ' . $numero . '">Excluir</button></td>'
+        . '<td class="col-solicitacao">' . checklist_solicitacao_html($dados) . '</td>'
+        . '<td><button type="button" class="js-excluir-item botao-perigo" aria-label="Excluir item ' . $numero . '"' . $travado . '>Excluir</button></td>'
         . '</tr>';
 }

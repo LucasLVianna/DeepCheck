@@ -120,3 +120,21 @@
     clip-path: inset(50%);
     white-space: nowrap;
 }
+
+.pgq-mes-ano {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.pgq-mes-ano legend {
+    margin-bottom: 0.25rem;
+    padding: 0;
+}
+
+.pgq-mes-ano select {
+    flex: 1;
+    font: inherit;
+}

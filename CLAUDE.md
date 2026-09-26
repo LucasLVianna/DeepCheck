@@ -14,12 +14,12 @@ Este documento é o contexto persistente do projeto. Leia-o antes de qualquer al
 
 ## ▶️ Ponto de retomada (atualizado em 2026-09-25)
 
-**Onde paramos**: Fases 1, 3 e 4 concluídas e validadas no navegador; **Fase 5 (Aba Checklist) concluída e testada via HTTP, aguardando o desenvolvedor validar no navegador**. Fase 2 (modelo de dados) avança junto com cada fase. Tudo commitado (ver `git log`).
+**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Próximo passo: Fase 7** (aba Não Conformidades + escalonamento): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
 
 **Ao retomar, fazer nesta ordem:**
-1. Perguntar ao desenvolvedor o resultado do teste da aba Checklist no navegador (`projeto.php?id=<projeto>&aba=checklist`: adicionar itens, marcar resultados, abrir NC, escolher classificação, mudar status para resolvida / fechada por exceção, sair de NC). Corrigir o que aparecer e marcar a Fase 5 como ✅✅.
-2. (Opcional) Lembrar do `DROP INDEX uk_checklists_projeto_nome` em `checklists` (limpeza; ver "Fase 5").
-3. Iniciar a **Fase 6 — Fluxo de e-mail de NC**, seguindo o mesmo processo das fases anteriores:
+1. ~~Validar a Fase 5 no navegador~~ ✅ validada em 2026-09-26. ~~`DROP INDEX uk_checklists_projeto_nome`~~ ✅ aplicado.
+2. ~~(Opcional) DROP INDEX~~ ✅.
+3. Continuar a **Fase 6 — Fluxo de e-mail de NC**, seguindo o mesmo processo das fases anteriores:
    - Ler os templates `~/Downloads/Trabalho Qualidade de Software/Não Conformidades/Solicitacao_Resolucao_Nao_Conformidade - 1..6.pdf` e o e-mail de exemplo em `~/Downloads/Trabalho Qualidade de Software/E-mails/Documentos Auditoria/` e comparar com o rascunho de `nao_conformidades` e `nc_emails_enviados` no "Modelo de Dados".
    - **Decidir com o desenvolvedor** a integração PHP → Python (síncrona via `shell_exec` × fila assíncrona; ver "Integração PHP → Python") e o provedor/credenciais SMTP (nunca commitar credenciais: usar `.env` + `env()`). O container PHP (`php:8.2-apache`) **não tem Python instalado** — vai exigir mudança no `Dockerfile` ou um serviço separado no `docker-compose.yml`.
    - Propor o SQL de `nao_conformidades` e `nc_emails_enviados` (status com `fechada_por_excecao`; FK `classificacao_nc_id` RESTRICT; FK para `projetos` em CASCADE; FK `checklist_item_id` — decidir RESTRICT, que bloqueia excluir item com NC enviada) e validar num MySQL descartável antes de entregar. **Não criar tabelas no banco do projeto**: o desenvolvedor aplica no Workbench e o Claude Code confere com `SHOW CREATE TABLE`.
@@ -194,6 +194,8 @@ Todos passaram, sem erros no log do PHP: criação (sem CSRF → 403, sem login 
 #### Convenções adicionadas (seguir nas próximas fases)
 
 - **Acesso a dados em `src/Models/<entidade>.php`** (funções procedurais que recebem `mysqli $conexao`); controllers só validam entrada, checam permissão e respondem. `src/Models/` é bloqueado pelo Apache.
+- **Todo CSS/JS nas views usa `asset('/public/...')`** (`<link href="<?= asset('/public/css/x.css') ?>">`, `<script src="<?= asset('/public/js/x.js') ?>">`) — nunca o caminho fixo, senão o navegador pode continuar com a versão antiga do cache.
+- **Não usar `<input type="month">` / `type="week"`** (não existem no Firefox/Safari). `type="date"` pode.
 - **Todo `fetch` POST nas telas novas usa `enviarPost(url, dados)` de `public/js/api.js`** (envia CSRF, trata sessão expirada redirecionando ao login, trata erro de rede/JSON). Incluir `<script src="/public/js/api.js">` antes do script da página.
 - Códigos HTTP nas APIs: 400 validação, 401 não autenticado/credencial errada, 403 sem permissão/CSRF, 404 não encontrado ou sem acesso, 405 método, 409 conflito, 429 rate limit, 500 erro interno.
 
@@ -265,12 +267,9 @@ Template de referência: `~/Downloads/Trabalho Qualidade de Software/Template Ch
 
 **Schema**: `checklists` foi criada com `UNIQUE (projeto_id, nome)` e `checklist_itens` não chegou a ser criada; o SQL corrigido (ALTER em `checklists` + CREATE de `checklist_itens` com o novo status) foi validado pelo Claude Code num MySQL descartável (container temporário, não o banco do projeto) e entregue ao desenvolvedor para aplicar no Workbench.
 
-**Verificado no banco (2026-09-25)**: `checklist_itens` criada exatamente como proposto. Em `checklists`, o `UNIQUE KEY uk_checklists_projeto (projeto_id)` **já foi aplicado** (a regra "1 checklist por projeto" está garantida pelo banco). Falta apenas remover o índice antigo, que ficou redundante (não causa problema, é só limpeza):
-```sql
-ALTER TABLE checklists DROP INDEX uk_checklists_projeto_nome;
-```
+**Verificado no banco (2026-09-25)**: `checklist_itens` criada exatamente como proposto. Em `checklists`, o `UNIQUE KEY uk_checklists_projeto (projeto_id)` **já foi aplicado** (a regra "1 checklist por projeto" está garantida pelo banco). O índice antigo redundante (`uk_checklists_projeto_nome`) foi removido pelo desenvolvedor em 2026-09-26 — `checklists` agora tem só `PRIMARY` e `uk_checklists_projeto (projeto_id)`.
 
-### Fase 5 — Aba Checklist: concluída e testada via HTTP (2026-09-25)
+### Fase 5 — Aba Checklist: concluída, testada via HTTP e validada no navegador (2026-09-25/26)
 
 #### O que foi implementado
 
@@ -304,11 +303,11 @@ Todos passaram, sem erros/warnings no log do PHP.
 - **HTTP (criador, membro e não membro)**: aba vazia (aderência "—", checklist só é criado no 1º item); adicionar (sem CSRF 403, não membro 404, descrição vazia 400, HTML escapado no `item_html`, membro também adiciona); fluxo de NC completo com horário de Brasília; indicadores corretos em cada resposta (cenário misto → 75%; trocar para resolvida → 100%); página renderiza indicadores, linhas de NC e campos desabilitados; item atrasado destacado; excluir (não membro 404, membro 200 com indicadores); **60 adições simultâneas sem número repetido**; limite de 500 itens (501º → 409) e aba com 500 itens carregando em ~16 ms; **excluir projeto com item usando classificação funciona** (CASCADE apaga checklist, itens e classificações, sem órfãos).
 - **Schema (MySQL descartável)**: CHECK impede status/identificação de NC em item não-NC; ENUM rejeita status fora da lista; UNIQUE impede número repetido e 2º checklist; RESTRICT impede apagar classificação em uso.
 
-**Não testado ainda**: interface no navegador real.
+**Validado pelo desenvolvedor no navegador real (2026-09-26)**: tudo funcionando. Observação dele: ao escolher o status `escalonada`, a "Data e hora do escalonamento" não é preenchida — **comportamento esperado**: essa data será gravada pelo fluxo de escalonamento da **Fase 7** (botão "Escalonar", que envia o e-mail ao superior). Na Fase 7, avaliar tirar `escalonada` da seleção manual para que só o fluxo defina esse status.
 
 #### Pendências conhecidas da Fase 5
 
-- (Opcional, limpeza) remover o índice redundante `uk_checklists_projeto_nome` de `checklists` (ver acima).
+- ~~Remover o índice redundante `uk_checklists_projeto_nome`~~ ✅ aplicado pelo desenvolvedor em 2026-09-26.
 - Ao excluir o **último** item, o próximo item novo reutiliza aquele número ("maior + 1"). Números de itens existentes nunca mudam. Se for preciso nunca reutilizar, será necessário um contador em `checklists` (mudança de schema).
 - O status `escalonada` já pode ser escolhido manualmente, mas `data_escalonamento` e o histórico de escalonamento só serão preenchidos pelo fluxo da Fase 7.
 - A partir da Fase 6: bloquear a saída de "Não conformidade" (e a exclusão do item) quando a NC já tiver sido enviada por e-mail.
@@ -317,11 +316,96 @@ Todos passaram, sem erros/warnings no log do PHP.
 - Edição simultânea do mesmo campo: vale o último salvamento.
 
 
-### Estrutura real de arquivos (após a Fase 5)
+### Análise da Fase 6 — Envio da NC por e-mail (em andamento, 2026-09-26)
+
+**Material lido**: `~/Downloads/Trabalho Qualidade de Software/Não Conformidades/Solicitacao_Resolucao_Nao_Conformidade - 1..6.pdf` e os e-mails em `.../E-mails/Documentos Auditoria/` (sequência completa do "Murilo": 1ª solicitação → escalonamento → resolução).
+
+**Estrutura do documento "Solicitação de Resolução de Não Conformidade" (Versão 1.0)**:
+- Cabeçalho: Projeto, Responsável pela Resolução, Responsável por QA (texto livre com vários nomes, ex.: "Emilly B., Giovanna P., Lucas L., Rodrigo Y."), Data da 1ª Solicitação, Prazo de Resolução, Nº de Escalonamento.
+- "Não Conformidade Identificada": Descrição | Classificação ("Simples | 1 hora") | Ação Corretiva Indicada.
+- "Histórico de Escalonamento": colunas **Superior | Responsável | Prazo para Resolução** ("Nenhum" no envio inicial).
+- "Observações" (texto livre; "Nenhuma observação adicional.").
+
+**Padrão dos e-mails (Outlook institucional @pucpr.edu.br, Microsoft 365)**:
+- 1ª solicitação: De = auditor (conta pessoal), Para = responsável pela resolução; assunto `Solicitação de Resolução de Não Conformidade - <Projeto>`; corpo curto ("Olá, <nome>, segue em anexo a Solicitação...") assinado "Equipe de QA - <nomes>"; **o documento vai como PDF anexo**.
+- Escalonamento (Fase 7): encaminhado ao superior (professora) com o 1º envio junto, e a resposta dela saiu **em CC para todos os envolvidos** (equipe de QA + responsáveis).
+- Resolução: o responsável responde "Não conformidade corrigida" para a equipe de QA (fora do sistema).
+
+**Decisões tomadas (desenvolvedor, 2026-09-26)**:
+- Integração PHP → Python: **síncrona** (ver "Integração PHP → Python").
+- **Conta remetente única do sistema** ("DeepCheck"): `From: "<Nome do usuário> via DeepCheck" <EMAIL_REMETENTE>`, `Reply-To` e `CC` = e-mail do usuário que enviou. O desenvolvedor vai criar a conta (Gmail com senha de app) e preencher o `.env`.
+- **Documento enviado como PDF anexo** (fiel ao template), gerado em Python com reportlab.
+- **Mailpit** como "pega-e-mails" de desenvolvimento.
+
+**Infraestrutura já feita (2026-09-26)**:
+- `Dockerfile`: `python3` + `python3-reportlab` (apt, Debian 13 trixie → Python 3.13, reportlab 4.3). `smtplib` é da biblioteca padrão.
+- `docker-compose.yml`: serviço `mailpit` (`axllent/mailpit`), SMTP em `mailpit:1025` só na rede interna; interface web em `http://localhost:8025` (`MAILPIT_PORT`), publicada só em `127.0.0.1`.
+- `.env.example`: variáveis `SMTP_HOST`, `SMTP_PORT`, `SMTP_SEGURANCA` (`starttls`/`ssl`/`nenhuma`), `SMTP_USUARIO`, `SMTP_SENHA`, `EMAIL_REMETENTE`, `EMAIL_REMETENTE_NOME`, `MAILPIT_PORT`, com os valores do Mailpit como padrão e o passo a passo do Gmail (senha de app) comentado.
+- Testado: container `app` enviou e-mail via `smtplib` e o Mailpit recebeu.
+- **O envio em uso é REAL** (decisão do desenvolvedor): o `.env` está configurado com o Gmail do sistema (`smtp.gmail.com:587`, `starttls`, senha de app). **Login SMTP testado em 2026-09-26: OK** (conexão, STARTTLS e autenticação aceitos; nenhum e-mail enviado no teste). O Mailpit serve apenas para os testes automáticos do Claude Code.
+- ⚠️ **Regra para testes do Claude Code**: nunca disparar e-mail real para endereços de teste. Para testes automáticos de envio, subir uma **cópia temporária do container `app`** (mesma imagem e mesmo código, outra porta, rede `deepcheck`) com `-e SMTP_HOST=mailpit -e SMTP_PORT=1025 -e SMTP_SEGURANCA=nenhuma -e SMTP_USUARIO= -e SMTP_SENHA=` — `env()` dá prioridade a variáveis de ambiente, então a cópia usa o Mailpit sem alterar o `.env`. Envio real só para o e-mail do próprio desenvolvedor e com autorização explícita dele.
+
+**SQL proposto (2026-09-26) e validado num MySQL descartável** — aguardando o desenvolvedor criar no Workbench: `nao_conformidades` (1 por item — `UNIQUE (checklist_item_id)`; campos do documento: descrição, classificação, ação corretiva, responsável pela resolução + e-mail, responsável por QA, data da 1ª solicitação, prazo, nº de escalonamento, status padronizado, observações; FK `projeto_id` CASCADE, `checklist_item_id` **RESTRICT**, `classificacao_nc_id` RESTRICT) e `nc_emails_enviados` (destinatário, CC, responder_para, assunto, corpo, nome do anexo + **PDF enviado em MEDIUMBLOB**, status_envio, erro_envio, enviado_por → usuario RESTRICT, NC CASCADE). A coluna `escalonamento_id` fica para a Fase 7 (junto com `nc_escalonamentos`).
+- **Achado no teste**: com `checklist_item_id` em RESTRICT, `DELETE FROM projetos` **falha** (o InnoDB tenta apagar os itens antes das NCs). Solução validada: `projeto_excluir()` passa a apagar as NCs do projeto **antes** do projeto, na mesma transação. Assim o RESTRICT continua impedindo excluir item com NC enviada.
+
+**Tabelas criadas pelo desenvolvedor e verificadas no banco (2026-09-26)**: `nao_conformidades` e `nc_emails_enviados` batem 100% com o SQL proposto.
+
+**Regras da Fase 6 (confirmadas pelo desenvolvedor em 2026-09-26)**:
+1. Depois de enviada, a NC fica "travada" no checklist: o item não sai de "Não conformidade" e responsável / classificação / ação corretiva ficam só leitura (é o que foi comunicado); o status continua editável. `nao_conformidades.status` e `checklist_itens.status_nc` são atualizados juntos.
+2. Prazo de resolução (no documento) = data prevista do checklist; Data da 1ª solicitação = momento do envio. **A data prevista passa a ser calculada em dias úteis** — ver "Regras de Negócio › 2. Classificação e Prazo de NC".
+3. "Responsável por QA" vem preenchido com o RQ do PGQ (ou o nome do usuário, se o PGQ não tiver RQ) e é editável no formulário de envio; o e-mail é assinado "Equipe de QA - <responsável por QA>".
+4. Envio exige classificação e responsável preenchidos no item.
+
+**Conta remetente — análise feita** (pergunta do desenvolvedor: "dá para enviar pela conta de cada usuário?"): a senha do DeepCheck não é a senha do e-mail (e só guardamos o hash dela); enviar pela conta Microsoft 365 institucional exigiria SMTP AUTH (normalmente desabilitado nesses tenants e sendo descontinuado pela Microsoft) ou OAuth com app registrado e aprovado pelo admin da PUCPR; guardar senha de e-mail de cada usuário exigiria armazená-la de forma reversível (risco alto). **Escolhido**: conta remetente única do sistema (SMTP no `.env`), com `From: "<Nome do usuário> via DeepCheck" <conta do sistema>`, `Reply-To: <e-mail do usuário>` e o usuário em CC (fica com cópia e as respostas vão para ele). Enviar com `From` = e-mail do usuário por um servidor que não é o dele **não** funciona (SPF/DKIM/DMARC → spam ou rejeição).
+
+### Fase 6 — Envio da NC por e-mail: concluída, testada via HTTP e validada no navegador com envio real (2026-09-26)
+
+#### O que foi implementado
+
+- **Prazo em dias úteis** (`checklist_calcular_prevista()` em `src/Models/checklist.php`), conforme "Regras de Negócio › 2". Prazo em dias é gravado como `23:59:59` e exibido só com a data (`checklist_formatar_prazo()`), no checklist e no PDF.
+- **Aba Checklist**:
+  - Nova coluna **"Solicitação de resolução"**: botão **"Enviar NC"** (habilitado só quando `checklist_item_pode_enviar()`: item NC, com classificação/data prevista e responsável, ainda não enviado) ou "Enviada em dd/mm/aaaa hh:mm".
+  - Botão abre um `<dialog>` com o resumo do documento (projeto, item, responsável, prazo, descrição, classificação, ação corretiva) e os campos: **e-mail do responsável** (obrigatório), **Responsável por QA** (pré-preenchido com o RQ do PGQ ou o nome do usuário), **Com cópia para** (opcional, até 10 e-mails) e **Observações**. Antes de enviar, espera terminar qualquer salvamento pendente da linha.
+  - **Depois do envio**, descrição, resultado, responsável, classificação e ação corretiva ficam travados (no servidor e na tela); o status continua editável e é **replicado em `nao_conformidades.status`** (`checklist_salvar_item()` em transação). Excluir o item fica bloqueado (409 na API + FK RESTRICT).
+- **Endpoint** `src/Controllers/nc_enviar.php` (login + CSRF + membro; rate limit de **20 tentativas de envio por usuário a cada 15 min**, contando falhas): valida (`nc_ler_envio()`), cria a NC e chama o script **na mesma transação** — se o envio falhar, faz rollback e nada fica gravado (resposta 502 com mensagem amigável; detalhe técnico só no log). Em caso de sucesso grava o e-mail em `nc_emails_enviados` com o **PDF exatamente como foi enviado**. Dois envios simultâneos do mesmo item → só 1 e-mail (UNIQUE em `checklist_item_id`; o segundo recebe 409).
+- **E-mail** (padrão dos exemplos do Outlook): `From: "<Nome do usuário> via DeepCheck" <EMAIL_REMETENTE>`, `To: <Responsável> <e-mail informado>`, `Cc:` usuário + cópias extras, `Reply-To:` usuário; assunto `Solicitação de Resolução de Não Conformidade - <Projeto>`; corpo igual ao dos exemplos, assinado "Equipe de QA - <Responsável por QA>"; anexo `Solicitacao_Resolucao_Nao_Conformidade - Item <nº>.pdf`.
+- **PDF** (reportlab, A4) no layout do template: título, subtítulo "Template ... — Versão 1.0", tabela de cabeçalho (Projeto, Responsável pela Resolução, Responsável por QA, Data da 1ª Solicitação, Prazo de Resolução, Nº de Escalonamento), faixas azuis "Não Conformidade Identificada" (Descrição | Classificação | Ação Corretiva Indicada), "Histórico de Escalonamento" (Superior | Responsável | Prazo para Resolução — "Nenhum" no 1º envio; já aceita linhas para a Fase 7) e "Observações" ("Nenhuma observação adicional." se vazio). Texto sempre escapado.
+- **Arquitetura do envio**: `config/email.php` (`email_config_smtp()` lê o `.env`; `email_executar_script()` roda `scripts/enviar_email.py` via `proc_open` sem shell, JSON no stdin/stdout — a senha SMTP nunca vai na linha de comando). O script gera o PDF, envia via `smtplib` (`starttls`/`ssl`/`nenhuma`, timeout 20 s) e devolve o PDF em base64; modo `apenas_pdf` gera sem enviar. `set_time_limit(60)` no endpoint.
+- `projeto_excluir()` agora apaga as NCs antes do projeto, na mesma transação (ver "Análise da Fase 6").
+
+#### Arquivos da Fase 6
+
+- **Criados**: `scripts/enviar_email.py`, `config/email.php`, `src/Models/nao_conformidades.php`, `src/Controllers/nc_enviar.php`.
+- **Alterados**: `Dockerfile` (python3 + python3-reportlab), `docker-compose.yml` (serviço `mailpit`), `.env.example` (variáveis de e-mail), `src/Models/checklist.php` (prazo em dias úteis, JOIN com `nao_conformidades`, travas, sincronização do status, `pode_enviar`), `src/Models/projetos.php` (`projeto_excluir()` em transação), `src/Models/pgq.php` (`pgq_rq_nome()`), `src/Controllers/checklist_item_excluir.php` (bloqueia item com NC enviada), `src/Views/abas/checklist.php` (coluna + dialog), `src/Views/abas/checklist_linha.php` (célula de solicitação e travas), `src/Views/projeto.php` (`$responsavelQaPadrao`), `public/js/checklist.js`, `public/css/checklist.css`.
+
+#### Testes realizados (dados de teste apagados e Mailpit esvaziado ao final)
+
+Todos passaram, sem erros/warnings no log do PHP. Envios feitos por uma **cópia temporária do app** apontando para o Mailpit (o app principal, configurado com o Gmail, não enviou nada).
+- **Prazo (PHP CLI, 13 casos)**: seg + 3 dias → qui (exemplo do desenvolvedor); sex + 1 dia → seg; sáb/dom + N dias → conta a partir de segunda; 10 dias atravessando 2 fins de semana; horas pulando o fim de semana (sex 17:00 + 24 h → seg 17:00; sáb 15:00 + 2 h → seg 02:00); formatação só com data para prazo em dias.
+- **PDF**: layout conferido visualmente contra o template; "Nº de Escalonamento" 0 aparece (bug corrigido: 0 saía em branco); HTML no texto sai literal; emoji/caracteres CJK não quebram a geração; entrada inválida → erro tratado.
+- **HTTP**: `pode_enviar` só com NC + classificação + responsável; botão habilitado só nesses itens; validações (sem CSRF 403, não membro 404, e-mail inválido, e-mail com quebra de linha/injeção de cabeçalho, QA vazio, CC inválido, item sem classificação, item conforme → 400, nada enviado); envio real para o Mailpit em ~0,2 s com From/To/Cc/Reply-To/assunto/corpo/anexo corretos; NC gravada com prazo = data prevista (dia útil, 23:59:59) e 1ª solicitação = momento do envio; **PDF no banco idêntico ao recebido (mesmo MD5)**; travas (5 campos → 400), status editável por outro membro e sincronizado com `nao_conformidades`, resolvida grava conclusão e atualiza aderência; excluir item enviado → 409; página mostra "Enviada em" e campos travados; reenviar → 409; **5 envios simultâneos → 1 NC e 1 e-mail**; **SMTP fora do ar → 502, rollback (nada gravado, item continua enviável)**; rate limit (21ª tentativa → 429); **excluir projeto com 3 NCs e 3 e-mails → tudo apagado, sem órfãos**.
+
+**Teste no navegador (desenvolvedor, Firefox 156, 2026-09-26) — 2 problemas encontrados e corrigidos:**
+1. **"Enviar NC" não fazia nada**: o Firefox usava o `checklist.js` antigo do cache (o log do Apache não mostrava nenhum download do JS novo), então o botão novo não tinha tratador de clique. **Correção**: helper `asset()` em `config/auth.php`, que acrescenta `?v=<data de modificação do arquivo>` a todo CSS/JS; todas as views passaram a usá-lo. Quando um arquivo muda, a URL muda e o navegador baixa a versão nova.
+2. **Mês/ano da capa do PGQ não funcionava**: `<input type="month">` não existe no Firefox (vira caixa de texto; o log mostrava 18 salvamentos recusados com 400). **Correção**: duas listas — `data_documento_mes` (Janeiro…Dezembro, constante `PGQ_MESES`) e `data_documento_ano` (ano atual ±5, incluindo o ano salvo) — validadas em `pgq_ler_entrada()` (os dois ou nenhum; gravado como dia 1 do mês). Testado via HTTP: salvar, reexibir selecionado, só um dos dois → 400, mês 13 → 400, limpar → NULL.
+
+**Validado pelo desenvolvedor no navegador (2026-09-26)**, após as correções: mês/ano da capa funcionando e **envio real pelo Gmail** para o próprio e-mail dele — "o email chegou certinho" (remetente, CC, PDF anexo e responder-para). Registro conferido no banco (NC + e-mail com `status_envio = sucesso` e PDF gravado).
+
+#### Pendências conhecidas da Fase 6
+
+- Se o e-mail sair mas a gravação final no banco falhar (muito improvável), o e-mail foi enviado sem registro — fica só no log (`DeepCheck: falha ao registrar envio...`).
+- Sem pré-visualização do PDF antes de enviar (o script já tem o modo `apenas_pdf`, dá para expor numa rota).
+- Sem tela para baixar o PDF/ver o e-mail enviado → **Fase 7** (aba Não Conformidades).
+- Rate limit de envio fica no `/tmp` do container (mesma limitação do login).
+- Feriados não entram no cálculo de prazo (só fins de semana).
+- Itens com data prevista calculada pela regra antiga (antes dos dias úteis) só são recalculados se a classificação for trocada.
+
+### Estrutura real de arquivos (após a Fase 6)
 
 ```
 config/                 bootstrap incluído por tudo (bloqueado na web)
   auth.php              sessão, login, CSRF, e(), responder_json(), HASH_FICTICIO
+  email.php             ponte PHP → Python (proc_open) e configuração SMTP do .env
   headers.php           headers de segurança
   conexao.php           mysqli ($conexao), utf8mb4, time_zone
   env.php               env('NOME')
@@ -329,13 +413,15 @@ config/                 bootstrap incluído por tudo (bloqueado na web)
 src/Models/             acesso a dados (bloqueado na web)
   projetos.php          projetos + membros + classificações padrão
   pgq.php               PGQ e sub-tabelas (seções 2, 3, 4)
-  checklist.php         checklist, itens, regras de NC e fórmula de aderência
+  checklist.php         checklist, itens, regras de NC, prazo em dias úteis e fórmula de aderência
+  nao_conformidades.php NCs enviadas, texto do e-mail e registro dos envios
   classificacoes_nc.php leitura das classificações (Fase 8 vai estender)
 src/Controllers/        endpoints (JSON, exceto logoff)
   login_backend.php, cadastrar_backend.php, logoff.php
   projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php
   pgq_salvar.php
   checklist_item_adicionar.php, checklist_item_atualizar.php, checklist_item_excluir.php
+  nc_enviar.php         gera o PDF e envia a Solicitação de Resolução de NC
 src/Views/              páginas
   login.php, cadastro.php
   menu.php              dashboard "Meus projetos"
@@ -346,6 +432,7 @@ src/Views/              páginas
   abas/checklist_linha.php  HTML de uma linha do checklist (aba + endpoint de adicionar)
 public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js, checklist.js
 public/css/             login, cadastro, navbar, menu, projeto, pgq, checklist
+scripts/                enviar_email.py — gera o PDF (reportlab) e envia (smtplib) (bloqueado na web)
 docker/                 apache/zz-deepcheck.conf, php/deepcheck.ini (bloqueado na web)
 index.html, style.css   landing page estática
 ```
@@ -374,13 +461,15 @@ A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta origina
 - Edição das classificações/prazos da seção 6 → **Fase 8**.
 
 **Checklist (Fase 5)**
-- (Opcional, limpeza) remover o índice redundante `uk_checklists_projeto_nome` de `checklists` — ver "Fase 5".
 - Excluir o último item faz o próximo reutilizar o número.
-- `data_escalonamento` e histórico de escalonamento → **Fase 7**; bloqueio de alterações em NC já enviada → **Fase 6**.
+- `data_escalonamento` (não é preenchida ao escolher `escalonada` manualmente — observado pelo desenvolvedor) e histórico de escalonamento → **Fase 7**; bloqueio de alterações em NC já enviada → **Fase 6**.
 - Nome do checklist fixo; importar/copiar itens de modelo; edição simultânea sem aviso de conflito.
 
+**E-mail de NC (Fase 6)**
+- Pré-visualização do PDF; tela para baixar o PDF/ver e-mails enviados (→ Fase 7); feriados fora do cálculo de prazo; itens com prazo antigo só recalculam ao trocar a classificação; e-mail enviado sem registro se a gravação final falhar (só log).
+
 **Banco (próximas fases)**
-- Criar `nao_conformidades`, `nc_escalonamentos`, `nc_emails_enviados` (Fases 6/7) — SQL proposto pelo Claude Code, aplicado pelo desenvolvedor no Workbench.
+- Criar `nc_escalonamentos` e a coluna/FK `nc_emails_enviados.escalonamento_id` (Fase 7) — SQL proposto pelo Claude Code, aplicado pelo desenvolvedor no Workbench.
 - FKs para `classificacoes_nc` devem ser RESTRICT; as demais filhas de `projetos` devem ser CASCADE (senão a exclusão de projeto retorna 409).
 
 ---
@@ -595,7 +684,11 @@ Exibir também o total de não aplicáveis (NNA), como a planilha faz.
 - Ao marcar um item do checklist com resultado = "nao_conformidade":
   1. Sistema grava `data_identificacao_nc` automaticamente (timestamp do servidor).
   2. Usuário escolhe a classificação (ex: Simples).
-  3. Sistema calcula `data_prevista_resolucao` = `data_identificacao_nc` + prazo da classificação.
+  3. Sistema calcula `data_prevista_resolucao` a partir de `data_identificacao_nc` **pulando fins de semana** (regra definida pelo desenvolvedor em 2026-09-26):
+     - **Prazo em dias**: a contagem começa **no dia seguinte** à identificação e só conta dias úteis (segunda a sexta). A data prevista é esse dia, **até o fim do dia** (gravado como `23:59:59`, exibido só como data). Ex.: NC marcada na segunda (dia 1) com 3 dias → quinta (dia 4); marcada na sexta com 1 dia → segunda; marcada no sábado com 1 dia → segunda.
+     - **Prazo em horas** *(interpretação do Claude Code, a confirmar)*: conta a partir do momento da identificação e as horas de sábado e domingo não contam. Ex.: sexta 17:00 + 24 horas → segunda 17:00.
+     - Feriados **não** são considerados (só sábado e domingo).
+     - Itens que já tinham data prevista calculada pela regra antiga só são recalculados se a classificação for trocada.
 
 ### 3. Fluxo de Envio de NC por E-mail (1º envio, escalonamento 0)
 1. Usuário informa e-mail do destinatário (responsável pela resolução).
@@ -667,7 +760,9 @@ Ajustar aos nomes/convenções já usados no projeto existente.
 
 ## Integração PHP → Python (envio de e-mail)
 
-Opções a avaliar na Fase 5 (escolher uma e documentar aqui a decisão):
+**Decisão (desenvolvedor, 2026-09-26): síncrona** — o PHP chama o script Python na própria requisição (`shell_exec`; na implementação, preferir `proc_open` com os dados via stdin: é o mesmo modelo síncrono, mas sem passar pelo shell e com código de saída). Exige instalar `python3` no container `app` (Dockerfile).
+
+Opções que foram avaliadas:
 - **Síncrona simples**: PHP grava os dados necessários em JSON temporário e chama `shell_exec("python3 scripts/enviar_email.py caminho.json")`.
 - **Fila assíncrona**: PHP insere o e-mail pendente numa tabela `nc_emails_enviados` com status `pendente`, e um cron job Python processa a fila periodicamente (mais robusto, evita travar a requisição HTTP).
 
@@ -681,8 +776,8 @@ Recomenda-se a fila assíncrona se o volume de e-mails crescer, mas a síncrona 
 2. **Fase 2 — Modelo de dados** 🟡 *(parcial em 2026-09-25: `projetos`, `projeto_membros`, `classificacoes_nc` criadas — ver "Fase 2 — parcial"; demais tabelas são criadas junto com a fase que as usa)*: desenvolvedor cria/ajusta as tabelas manualmente no MySQL Workbench, seguindo o schema acima como base; Claude Code apenas valida se os nomes usados no código batem com o que foi criado.
 3. **Fase 3 — Dashboard de projetos** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 3 — Dashboard de Projetos")*: CRUD de projetos (criar, editar nome, apagar) + tela de acesso via ID/senha do projeto.
 4. **Fase 4 — Aba PGQ** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 4 — Aba PGQ")*: formulário completo baseado no template, com sub-tabelas dinâmicas (documentos, itens avaliados, plano de avaliações).
-5. **Fase 5 — Aba Checklist** ✅ *(concluída e testada via HTTP em 2026-09-25 — ver "Fase 5 — Aba Checklist"; falta validar no navegador)*: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
-6. **Fase 6 — Fluxo de e-mail de NC**: formulário de envio, integração com script Python, template de comunicação.
+5. **Fase 5 — Aba Checklist** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-26 — ver "Fase 5 — Aba Checklist")*: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
+6. **Fase 6 — Fluxo de e-mail de NC** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador com envio real pelo Gmail em 2026-09-26 — ver "Fase 6 — Envio da NC por e-mail")*: formulário de envio, integração com script Python, template de comunicação.
 7. **Fase 7 — Aba Não Conformidades**: listagem, status, histórico, ação de escalonamento (reaproveitando o fluxo de e-mail da Fase 6 com campos extras).
 8. **Fase 8 — Configuração de classificações/prazos por projeto**: tela para o usuário definir "Simples/Média/Alta" e seus prazos, usada pelas Fases 5 e 7.
 
