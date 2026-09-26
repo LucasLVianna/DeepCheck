@@ -56,30 +56,19 @@ $projetoId = (int) $item['projeto_id'];
 $projeto = projeto_do_membro($conexao, $projetoId, $usuarioId);
 $classificacao = array_column(classificacoes_do_projeto($conexao, $projetoId), null, 'id')[$item['classificacao_nc_id']];
 
-$stmt = $conexao->prepare("SELECT nome_usuario, email_usuario FROM usuario WHERE id = ?");
-$stmt->bind_param("i", $usuarioId);
-$stmt->execute();
-$usuario = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
+$usuario = nc_usuario_remetente($conexao, $usuarioId);
 $agora = date('Y-m-d H:i:s');
 $texto = nc_texto_email($projeto['nome'], $item['responsavel_resolucao'], $envio['responsavel_qa']);
-$cc = array_values(array_unique(array_merge([$usuario['email_usuario']], $envio['cc'])));
+$cc = nc_lista_cc(array_merge([$usuario['email_usuario']], $envio['cc']), $envio['email_responsavel']);
 $anexoNome = nc_nome_anexo((int) $item['numero_item']);
 
-$entradaScript = [
-    'anexo_nome' => $anexoNome,
-    'email'      => [
-        'de_nome'        => $usuario['nome_usuario'] . ' via ' . env('EMAIL_REMETENTE_NOME', 'DeepCheck'),
-        'de_email'       => env('EMAIL_REMETENTE', ''),
-        'para'           => $envio['email_responsavel'],
-        'para_nome'      => $item['responsavel_resolucao'],
-        'cc'             => $cc,
-        'responder_para' => $usuario['email_usuario'],
-        'assunto'        => $texto['assunto'],
-        'corpo'          => $texto['corpo'],
-    ],
-    'documento'  => [
+$entradaScript = nc_entrada_script(
+    $usuario,
+    $envio['email_responsavel'],
+    $item['responsavel_resolucao'],
+    $cc,
+    $texto,
+    [
         'projeto'                   => $projeto['nome'],
         'responsavel_resolucao'     => $item['responsavel_resolucao'],
         'responsavel_qa'            => $envio['responsavel_qa'],
@@ -92,7 +81,8 @@ $entradaScript = [
         'historico'                 => [],
         'observacoes'               => $envio['observacoes'],
     ],
-];
+    $anexoNome
+);
 
 // O envio leva alguns segundos (SMTP); o padrão de 30 s do PHP é apertado.
 set_time_limit(60);

@@ -1,0 +1,225 @@
+.nc-aba {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.nc-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.nc-resumo {
+    margin: 0;
+}
+
+.nc-filtro select {
+    margin-left: 0.25rem;
+    font: inherit;
+}
+
+.mensagem {
+    min-height: 1.2em;
+    margin: 0;
+}
+
+.mensagem-erro,
+.texto-alerta {
+    color: #c62828;
+}
+
+.mensagem-sucesso {
+    color: #2e7d32;
+}
+
+.vazio,
+.dica {
+    color: #555;
+}
+
+.dica {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.nc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-left: 4px solid #f0ad4e;
+    border-radius: 8px;
+}
+
+.nc-card.nc-atrasada {
+    border-left-color: #c62828;
+}
+
+.nc-card.nc-encerrada {
+    border-left-color: #2e7d32;
+}
+
+.nc-card-cabecalho {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nc-card-cabecalho h3 {
+    margin: 0;
+}
+
+.nc-status,
+.nc-alerta {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #eee;
+}
+
+.status-pendente { background: #fff3cd; }
+.status-escalonada { background: #ffe0b2; }
+.status-nao_resolvida { background: #ffcdd2; }
+.status-resolvida { background: #c8e6c9; }
+.status-fechada_por_excecao { background: #e0e0e0; }
+
+.nc-alerta {
+    color: #fff;
+    background: #c62828;
+}
+
+.nc-descricao {
+    margin: 0;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.nc-dados {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.nc-dados dt {
+    color: #555;
+}
+
+.nc-dados dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.nc-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nc-acoes select {
+    margin-left: 0.25rem;
+    font: inherit;
+}
+
+.nc-historico summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.nc-historico h4 {
+    margin: 0.75rem 0 0.25rem;
+}
+
+.tabela-rolagem {
+    overflow-x: auto;
+}
+
+.nc-tabela {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.nc-tabela th,
+.nc-tabela td {
+    padding: 0.3rem;
+    border: 1px solid #ddd;
+    text-align: left;
+    vertical-align: top;
+}
+
+.nc-tabela thead th {
+    background: #eee;
+}
+
+.nc-cc {
+    max-width: 260px;
+    overflow-wrap: anywhere;
+}
+
+.dialog-nc {
+    width: min(640px, calc(100vw - 2rem));
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.dialog-nc::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog-nc form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.dialog-nc h3 {
+    margin: 0;
+}
+
+.dialog-nc input,
+.dialog-nc textarea {
+    box-sizing: border-box;
+    width: 100%;
+    font: inherit;
+}
+
+.dialog-nc-resumo {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.3rem 0.75rem;
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background: #f5f5f5;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.dialog-nc-resumo dt {
+    font-weight: 600;
+}
+
+.dialog-nc-resumo dd {
+    margin: 0;
+}
+
+.dialog-nc-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.obrigatorio {
+    color: red;
+}

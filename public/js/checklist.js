@@ -65,6 +65,8 @@ function aplicarItem(linha, item) {
         // Campos de NC só em item NC; depois do envio da NC, só o status continua editável.
         if (nome === 'status_nc') {
             campo.disabled = item.resultado !== 'nao_conformidade';
+            // 'escalonada' só pelo botão "Escalonar" (aba Não Conformidades).
+            campo.querySelector('option[value="escalonada"]').disabled = campo.value !== 'escalonada';
         } else if (CAMPOS_NC.includes(nome)) {
             campo.disabled = item.resultado !== 'nao_conformidade' || item.nc_enviada;
         } else {

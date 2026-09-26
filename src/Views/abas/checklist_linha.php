@@ -3,14 +3,17 @@
 // endpoint que adiciona item (devolve a linha pronta). Requer src/Models/checklist.php,
 // src/Models/classificacoes_nc.php e e() (config/auth.php).
 
-function checklist_opcoes_html(array $opcoes, string $selecionado, string $vazio = ''): string
+// $bloqueados: valores que aparecem mas não podem ser escolhidos (exceto se já selecionados).
+function checklist_opcoes_html(array $opcoes, string $selecionado, string $vazio = '', array $bloqueados = []): string
 {
     $html = $vazio;
     foreach ($opcoes as $valor => $rotulo) {
+        $ehSelecionado = (string) $valor === $selecionado;
         $html .= sprintf(
-            '<option value="%s"%s>%s</option>',
+            '<option value="%s"%s%s>%s</option>',
             e((string) $valor),
-            (string) $valor === $selecionado ? ' selected' : '',
+            $ehSelecionado ? ' selected' : '',
+            !$ehSelecionado && in_array((string) $valor, $bloqueados, true) ? ' disabled' : '',
             e($rotulo)
         );
     }
@@ -60,7 +63,7 @@ function checklist_linha_html(array $item, array $classificacoes): string
         . '<td class="col-data" data-exibe="data_escalonamento">' . e($dados['data_escalonamento']) . '</td>'
         . '<td class="col-data" data-exibe="data_conclusao_nc">' . e($dados['data_conclusao_nc']) . '</td>'
         . '<td><select data-campo="status_nc" aria-label="Status da NC do item ' . $numero . '"' . $bloqueadoStatus . '>'
-            . checklist_opcoes_html(CHECKLIST_STATUS_NC, $dados['status_nc'], '<option value="" disabled' . ($dados['status_nc'] === '' ? ' selected' : '') . '>—</option>') . '</select></td>'
+            . checklist_opcoes_html(CHECKLIST_STATUS_NC, $dados['status_nc'], '<option value="" disabled' . ($dados['status_nc'] === '' ? ' selected' : '') . '>—</option>', ['escalonada']) . '</select></td>'
         . '<td class="col-solicitacao">' . checklist_solicitacao_html($dados) . '</td>'
         . '<td><button type="button" class="js-excluir-item botao-perigo" aria-label="Excluir item ' . $numero . '"' . $travado . '>Excluir</button></td>'
         . '</tr>';

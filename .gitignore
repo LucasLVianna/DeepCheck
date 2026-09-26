@@ -21,3 +21,5 @@ storage/uploads/
 public/uploads/**
 !public/uploads/**/
 !public/uploads/**/.gitkeep
+# Cache do Python (scripts/)
+__pycache__/

@@ -332,6 +332,11 @@ function checklist_aplicar_alteracao(array $item, string $campo, string $valor, 
             if (!isset(CHECKLIST_STATUS_NC[$valor])) {
                 return ['erro' => 'Status da NC inválido.'];
             }
+            // 'escalonada' só é definido pelo fluxo de escalonamento (aba Não Conformidades),
+            // para não existir NC escalonada sem escalonamento registrado.
+            if ($valor === 'escalonada' && $item['status_nc'] !== 'escalonada') {
+                return ['erro' => 'Para escalonar, use o botão "Escalonar" na aba Não Conformidades.'];
+            }
             $encerrado = in_array($valor, CHECKLIST_STATUS_NC_ENCERRADOS, true);
             if (!$encerrado) {
                 $item['data_conclusao_nc'] = null;

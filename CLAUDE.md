@@ -14,7 +14,7 @@ Este documento é o contexto persistente do projeto. Leia-o antes de qualquer al
 
 ## ▶️ Ponto de retomada (atualizado em 2026-09-25)
 
-**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Próximo passo: Fase 7** (aba Não Conformidades + escalonamento): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
+**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Fase 7 concluída e validada no navegador** (com escalonamento real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 7: aba Não Conformidades e escalonamento"). **Próximo e último passo do plano: Fase 8** — tela para editar as classificações/prazos de NC do projeto (hoje só leitura na seção 6 do PGQ); não exige tabela nova. Pontos a decidir com o desenvolvedor antes: onde fica a tela (seção 6 do PGQ, como diz "Regras de Negócio › 2"), quem pode editar (criador ou qualquer membro), o que acontece com NCs/itens que já usam uma classificação quando o prazo muda (recalcular ou não) e bloqueio de exclusão de classificação em uso (FK RESTRICT já existe). Plano original da etapa de análise (já cumprido): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
 
 **Ao retomar, fazer nesta ordem:**
 1. ~~Validar a Fase 5 no navegador~~ ✅ validada em 2026-09-26. ~~`DROP INDEX uk_checklists_projeto_nome`~~ ✅ aplicado.
@@ -400,7 +400,67 @@ Todos passaram, sem erros/warnings no log do PHP. Envios feitos por uma **cópia
 - Feriados não entram no cálculo de prazo (só fins de semana).
 - Itens com data prevista calculada pela regra antiga (antes dos dias úteis) só são recalculados se a classificação for trocada.
 
-### Estrutura real de arquivos (após a Fase 6)
+### Análise da Fase 7 — Aba Não Conformidades + escalonamento (em andamento, 2026-09-26)
+
+**Referências**: CLAUDE.md "Regras de Negócio › 4. Fluxo de Escalonamento"; e-mails `~/Downloads/Trabalho Qualidade de Software/E-mails/Documentos Auditoria/Murilo/escalonamento.pdf` (a NC não resolvida no prazo foi **encaminhada à professora (superior) com o 1º envio junto**, assunto `ENC: Solicitação de Resolução de Não Conformidade - <Projeto>`, corpo "Segue em anexo solicitação de não conformidade escalonada, cujo foi enviada (segue anexo do primeiro envio), e não resolvida durante o período de tempo requisitado..."; a resposta da professora saiu **em CC para toda a equipe de QA e os responsáveis**) e `resolucao_pos_escalonamento.pdf`. Template: seção "Histórico de Escalonamento" com colunas **Superior | Responsável | Prazo para Resolução**.
+
+**SQL proposto (2026-09-26), validado num MySQL descartável, criado pelo desenvolvedor e verificado no banco (bate 100%)**:
+- `nc_escalonamentos` (1 linha por ciclo): `nao_conformidade_id` (CASCADE), `numero_escalonamento` (≥ 1, `UNIQUE (nao_conformidade_id, numero_escalonamento)`), `superior_nome`, `superior_email`, `responsavel_resolucao` (coluna "Responsável" do histórico), `novo_prazo_resolucao`, `observacoes`, `escalonado_por` (→ usuario RESTRICT), `enviado_em`.
+- `ALTER TABLE nc_emails_enviados ADD escalonamento_id` (NULL = 1º envio; FK → `nc_escalonamentos` CASCADE).
+- Testado: número repetido e número 0 bloqueados; usuário que escalonou não pode ser apagado; `projeto_excluir()` (NCs antes do projeto) continua limpando tudo sem órfãos.
+
+**Regras confirmadas pelo desenvolvedor (2026-09-26)** — todas as recomendações aceitas, com a regra de prazo do item 2 definida por ele:
+1. Escalonar é possível enquanto a NC estiver aberta (`pendente`, `nao_resolvida`, `escalonada`), com o prazo vencido ou não; não para `resolvida`/`fechada_por_excecao`.
+2. Formulário: nome e e-mail do superior, responsável (pré-preenchido), novo prazo, observações.
+   - **Novo prazo (regra do desenvolvedor)**: mesma duração da classificação da NC, contada a partir do **dia útil seguinte ao prazo anterior** (o prazo vigente: o original ou o do último escalonamento). Ex.: enviada no dia 1 com 3 dias úteis → prazo dia 4; não resolvida, o escalonamento conta 5, 6, 7 → novo prazo **dia 7**. Implementação: `checklist_calcular_prevista(<prazo vigente>, <classificação>)` (mesma função de dias úteis; em horas, soma as horas a partir do prazo vigente pulando fins de semana).
+   - O valor calculado vem preenchido e pode ser ajustado; o servidor exige que o novo prazo seja **posterior ao momento do escalonamento** (se o escalonamento for feito muito depois do prazo vencido, o cálculo pode cair no passado e o formulário avisa para ajustar).
+3. E-mail: Para = superior; CC = responsável pela resolução + todos os envolvidos dos ciclos anteriores (destinatários e CCs de todos os e-mails anteriores da NC) + usuário; Reply-To = usuário; assunto `Escalonamento Nº <n> - Solicitação de Resolução de Não Conformidade - <Projeto>`; anexos = PDF novo (com o histórico preenchido e Nº de Escalonamento atualizado) + PDF do 1º envio.
+4. Efeitos: `numero_escalonamento` +1; status `escalonada` (NC e item); `checklist_itens.data_escalonamento` = agora; `checklist_itens.data_prevista_resolucao` = novo prazo (atraso passa a ser medido pelo novo prazo); `nao_conformidades.prazo_resolucao` mantém o prazo original (cabeçalho do documento).
+5. `escalonada` deixa de ser selecionável manualmente (só pelo botão "Escalonar").
+7. Botão **"Reenviar"** (incluído): manda de novo a solicitação (documento atual) ao responsável pela resolução, com CC para o usuário e para as cópias do 1º envio.
+6. Aba NC: lista das NCs do projeto (item, descrição, classificação, responsável, 1ª solicitação, prazo atual, nº de escalonamento, status editável, destaque de atraso), histórico de escalonamentos e de e-mails de cada NC com download dos PDFs enviados, e o botão "Escalonar".
+
+### Fase 7 — Aba Não Conformidades + escalonamento: concluída, testada via HTTP e validada no navegador (2026-09-26)
+
+#### O que foi implementado
+
+- **Aba "Não Conformidades"** (`projeto.php?id=X&aba=nc` → partial `src/Views/abas/nc.php`):
+  - Resumo (total, abertas, com prazo vencido) e filtro (todas / abertas / com prazo vencido / encerradas, no navegador).
+  - Um card por NC enviada: item, status (etiqueta colorida), "Prazo vencido", descrição, classificação, responsável + e-mail, responsável por QA, ação corretiva, 1ª solicitação, **prazo original**, **prazo atual**, nº de escalonamento, último escalonamento, conclusão. Borda do card: amarela (aberta), vermelha (prazo vencido), verde (encerrada).
+  - **Status editável** no card (usa o mesmo endpoint e as mesmas regras do checklist: `checklist_item_atualizar.php` com `campo=status_nc`, sincronizando item e NC).
+  - Botões **Escalonar** e **Reenviar** (só para NC aberta).
+  - "Histórico" (`<details>`): tabela do Histórico de Escalonamento (Nº, superior + e-mail, responsável, prazo, data, quem escalonou) e tabela dos **e-mails enviados** (data, tipo — 1º envio / Escalonamento Nº n / Reenvio —, para, cópia, quem enviou, **link para baixar o PDF exatamente como foi enviado**).
+  - Após escalonar/reenviar/mudar status, a aba recarrega e mostra a mensagem (via `sessionStorage`).
+- **Escalonar** (dialog + `src/Controllers/nc_escalonar.php`): nome e e-mail do superior, responsável pela resolução (pré-preenchido com o do último ciclo), **novo prazo pré-calculado** pela regra do desenvolvedor (`nc_prazo_escalonamento()`; `<input type="date">` para prazo em dias, `datetime-local` para horas; aviso se o cálculo já caiu no passado) e observações. No servidor: NC aberta, novo prazo posterior a agora, **nº de escalonamento visto na tela = nº atual com `SELECT ... FOR UPDATE`** (clique duplo/abas simultâneas → 409), rate limit compartilhado com o envio (20/15 min por usuário). Tudo numa transação com o envio: `nc_registrar_escalonamento()` grava o ciclo, NC (`numero_escalonamento` +1, status `escalonada`) e item (`status_nc = 'escalonada'`, **`data_escalonamento` = agora**, `data_prevista_resolucao` = novo prazo, conclusão limpa); se o e-mail falhar, rollback total.
+  - E-mail: Para = superior; CC = responsável + todos os envolvidos de e-mails anteriores da NC + usuário (`nc_lista_cc()`: minúsculos, sem repetição, sem o destinatário); assunto `Escalonamento Nº <n> - Solicitação de Resolução de Não Conformidade - <Projeto>`; anexos = PDF novo (`... - Item <nº> - Escalonamento <n>.pdf`, com Nº de Escalonamento e o Histórico preenchidos, prazo original no cabeçalho) + **PDF do 1º envio** (lido do banco).
+- **Reenviar** (`src/Controllers/nc_reenviar.php`, com `confirm()`): documento atual (com histórico) para o responsável pela resolução, CC = usuário + cópias do 1º envio, assunto `Reenvio - Solicitação ...`. Registrado em `nc_emails_enviados` com `escalonamento_id = NULL`.
+- **Download do PDF** (`src/Controllers/nc_email_pdf.php?id=<e-mail>`): GET, só membros do projeto (senão 404), sem login → login; `Content-Disposition: attachment` com nome UTF-8.
+- **`escalonada` não é mais selecionável manualmente**: `checklist_aplicar_alteracao()` recusa (exceto manter o valor atual) e a opção aparece desabilitada no checklist e na aba NC (`checklist_opcoes_html(..., $bloqueados)`; o JS do checklist mantém a opção bloqueada).
+- **Model** `src/Models/nao_conformidades.php` ampliado: `NC_STATUS_ABERTOS`, `NC_COLUNAS`/`NC_FROM`, `nc_do_membro()`, `nc_listar_do_projeto()` (NCs + escalonamentos + e-mails sem o PDF), `nc_historico()`, `nc_envolvidos()`, `nc_primeiro_email()`, `nc_email_pdf_do_membro()`, `nc_ler_escalonamento()`, `nc_prazo_escalonamento()`, `nc_registrar_escalonamento()`, `nc_documento()`, `nc_entrada_script()`, `nc_usuario_remetente()`, `nc_lista_cc()`, textos de e-mail de escalonamento e reenvio. `nc_enviar.php` passou a usar os helpers compartilhados; `nc_registrar_email()` grava `escalonamento_id`.
+- **Script Python**: aceita `anexos_extras` (PDFs em base64 anexados junto) e usa `policy.SMTP.clone(max_line_length=998)` — **bug corrigido**: com o limite padrão (78), o Python quebrava assuntos longos com acento e inseria espaço duplo ("Resolução de  Não"); afetava também o 1º envio em projetos de nome longo.
+- **Front**: `public/js/nc.js`, `public/css/nc.css`.
+
+#### Arquivos da Fase 7
+
+- **Criados**: `src/Views/abas/nc.php`, `src/Controllers/{nc_escalonar,nc_reenviar,nc_email_pdf}.php`, `public/js/nc.js`, `public/css/nc.css`.
+- **Alterados**: `src/Models/nao_conformidades.php`, `src/Models/checklist.php` (bloqueio de `escalonada` manual), `src/Controllers/nc_enviar.php` (helpers), `src/Views/abas/checklist_linha.php` (opções bloqueadas), `src/Views/projeto.php` (aba NC), `public/js/checklist.js`, `scripts/enviar_email.py`.
+
+#### Testes realizados (dados de teste apagados e Mailpit esvaziado ao final)
+
+Todos passaram, sem erros/warnings no log. Envios por uma **cópia temporária do app** apontando para o Mailpit.
+- **Regras (PHP CLI, 18 verificações)**: exemplo do desenvolvedor (prazo dia 22 → 23, 24, 25); enviada seg 21 com 3 dias → prazo qui 24 → escalonamento sex 25, seg 28, ter 29; 2º escalonamento conta a partir do prazo do 1º; classificação em horas (sex 17:00 + 24 h → seg 17:00); validação do formulário (prazo no passado, data inexistente, formato errado para a unidade, e-mail inválido/injeção de cabeçalho, nome vazio; prazo "hoje" em dias aceito até 23:59:59); lista de CC; `escalonada` manual bloqueada (manter ou sair dela é permitido).
+- **HTTP**: aba vazia; cards, botões e opção `escalonada` desabilitada; validações (sem CSRF 403, não membro 404, prazo no passado 400, e-mail inválido 400, nº desatualizado 409, formato de dia em classificação de horas 400 — nenhum e-mail enviado); 1º escalonamento por um membro (não criador): NC nº 1/escalonada com prazo original mantido, item com status, **data do escalonamento** e prevista = novo prazo sugerido (30/09 → 05/10); e-mail com Para/CC (responsável, remetente e CC do 1º envio, usuário)/Reply-To/assunto/corpo corretos e **2 anexos** (PDF novo + PDF do 1º envio); PDF do escalonamento conferido visualmente (Nº 1, histórico preenchido, observação); download do PDF (membro 200 com nome correto, não membro 404, sem login → login, id inexistente 404); 2º escalonamento (sugestão 05/10 → 08/10; CC inclui o superior do 1º ciclo); reenvio (para o responsável, CC do 1º envio); status → resolvida pela aba (NC sincronizada); escalonar/reenviar NC resolvida → 409; voltar a `escalonada` à mão → 400; **5 escalonamentos simultâneos → 1 escalonamento e 1 e-mail**; **SMTP fora do ar → 502 e nada muda** (escalonamentos, NC e item iguais); assunto do reenvio sem espaço duplo após a correção; histórico na aba com tipos (1º envio / Escalonamento Nº n / Reenvio) e 7 links de PDF; checklist mostra a data do escalonamento; **excluir o projeto com 2 NCs, 3 escalonamentos e 7 e-mails → tudo apagado, sem órfãos**.
+
+**Validado pelo desenvolvedor no navegador (2026-09-26)**: "está tudo funcionando" — aba NC, download dos PDFs, escalonamento real pelo Gmail (conferido no banco: 2 NCs com escalonamento Nº 1, e-mails com `status_envio = sucesso` e `data_escalonamento` gravada no checklist) e mudança de status.
+
+#### Pendências conhecidas da Fase 7
+
+- Reenvio: se o e-mail sair e a gravação do registro falhar, fica só no log.
+- O responsável pela resolução informado no escalonamento fica no histórico (e no cabeçalho do documento daquele ciclo), mas `nao_conformidades.responsavel_resolucao`/`responsavel_email` continuam os do 1º envio (o reenvio usa o e-mail original).
+- Sem escalonamento automático quando o prazo vence (é sempre uma ação do usuário); sem notificação de prazo vencido.
+- Filtro da aba é só no navegador (sem paginação; ok para o volume esperado).
+
+### Estrutura real de arquivos (após a Fase 7)
 
 ```
 config/                 bootstrap incluído por tudo (bloqueado na web)
@@ -414,14 +474,15 @@ src/Models/             acesso a dados (bloqueado na web)
   projetos.php          projetos + membros + classificações padrão
   pgq.php               PGQ e sub-tabelas (seções 2, 3, 4)
   checklist.php         checklist, itens, regras de NC, prazo em dias úteis e fórmula de aderência
-  nao_conformidades.php NCs enviadas, texto do e-mail e registro dos envios
+  nao_conformidades.php NCs enviadas, escalonamentos, reenvio, textos dos e-mails e registro dos envios
   classificacoes_nc.php leitura das classificações (Fase 8 vai estender)
 src/Controllers/        endpoints (JSON, exceto logoff)
   login_backend.php, cadastrar_backend.php, logoff.php
   projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php
   pgq_salvar.php
   checklist_item_adicionar.php, checklist_item_atualizar.php, checklist_item_excluir.php
-  nc_enviar.php         gera o PDF e envia a Solicitação de Resolução de NC
+  nc_enviar.php         gera o PDF e envia a Solicitação de Resolução de NC (1º envio)
+  nc_escalonar.php, nc_reenviar.php, nc_email_pdf.php (download do PDF enviado)
 src/Views/              páginas
   login.php, cadastro.php
   menu.php              dashboard "Meus projetos"
@@ -430,8 +491,9 @@ src/Views/              páginas
   abas/pgq.php          partial da aba PGQ
   abas/checklist.php    partial da aba Checklist
   abas/checklist_linha.php  HTML de uma linha do checklist (aba + endpoint de adicionar)
-public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js, checklist.js
-public/css/             login, cadastro, navbar, menu, projeto, pgq, checklist
+  abas/nc.php           partial da aba Não Conformidades
+public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js, checklist.js, nc.js
+public/css/             login, cadastro, navbar, menu, projeto, pgq, checklist, nc
 scripts/                enviar_email.py — gera o PDF (reportlab) e envia (smtplib) (bloqueado na web)
 docker/                 apache/zz-deepcheck.conf, php/deepcheck.ini (bloqueado na web)
 index.html, style.css   landing page estática
@@ -462,14 +524,17 @@ A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta origina
 
 **Checklist (Fase 5)**
 - Excluir o último item faz o próximo reutilizar o número.
-- `data_escalonamento` (não é preenchida ao escolher `escalonada` manualmente — observado pelo desenvolvedor) e histórico de escalonamento → **Fase 7**; bloqueio de alterações em NC já enviada → **Fase 6**.
+- ~~`data_escalonamento` e histórico de escalonamento~~ ✅ resolvido na Fase 7 (gravados pelo botão "Escalonar"; `escalonada` não é mais manual). ~~Bloqueio de alterações em NC enviada~~ ✅ Fase 6.
 - Nome do checklist fixo; importar/copiar itens de modelo; edição simultânea sem aviso de conflito.
 
 **E-mail de NC (Fase 6)**
-- Pré-visualização do PDF; tela para baixar o PDF/ver e-mails enviados (→ Fase 7); feriados fora do cálculo de prazo; itens com prazo antigo só recalculam ao trocar a classificação; e-mail enviado sem registro se a gravação final falhar (só log).
+- Pré-visualização do PDF; ~~tela para baixar o PDF/ver e-mails enviados~~ ✅ Fase 7; feriados fora do cálculo de prazo; itens com prazo antigo só recalculam ao trocar a classificação; e-mail enviado sem registro se a gravação final falhar (só log).
 
-**Banco (próximas fases)**
-- Criar `nc_escalonamentos` e a coluna/FK `nc_emails_enviados.escalonamento_id` (Fase 7) — SQL proposto pelo Claude Code, aplicado pelo desenvolvedor no Workbench.
+**Não Conformidades (Fase 7)**
+- Responsável/e-mail do escalonamento não atualizam a NC (reenvio usa o e-mail original); sem escalonamento automático nem aviso de prazo vencido; reenvio sem registro se a gravação falhar (só log).
+
+**Banco**
+- Todas as tabelas do Modelo de Dados já existem (Fase 7: `nc_escalonamentos` + `nc_emails_enviados.escalonamento_id`). A Fase 8 (edição de classificações) não exige tabela nova.
 - FKs para `classificacoes_nc` devem ser RESTRICT; as demais filhas de `projetos` devem ser CASCADE (senão a exclusão de projeto retorna 409).
 
 ---
@@ -773,12 +838,12 @@ Recomenda-se a fila assíncrona se o volume de e-mails crescer, mas a síncrona 
 ## Plano de Implementação por Fases
 
 1. **Fase 1 — Auditoria da base existente** ✅✅ *(concluída, testada via HTTP direto E validada manualmente pelo navegador em 2026-09-25 — ver "Fase 1 — concluída e validada")*: revisar segurança, login/logoff, navbar. Nome real da tabela de usuário (`usuario`) confirmado em todo o Modelo de Dados.
-2. **Fase 2 — Modelo de dados** 🟡 *(parcial em 2026-09-25: `projetos`, `projeto_membros`, `classificacoes_nc` criadas — ver "Fase 2 — parcial"; demais tabelas são criadas junto com a fase que as usa)*: desenvolvedor cria/ajusta as tabelas manualmente no MySQL Workbench, seguindo o schema acima como base; Claude Code apenas valida se os nomes usados no código batem com o que foi criado.
+2. **Fase 2 — Modelo de dados** ✅ *(concluída em 2026-09-26: todas as 13 tabelas do Modelo de Dados foram criadas pelo desenvolvedor no Workbench ao longo das Fases 2–7 e conferidas no banco — ver "Modelo de Dados")*: desenvolvedor cria/ajusta as tabelas manualmente no MySQL Workbench, seguindo o schema acima como base; Claude Code apenas valida se os nomes usados no código batem com o que foi criado.
 3. **Fase 3 — Dashboard de projetos** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 3 — Dashboard de Projetos")*: CRUD de projetos (criar, editar nome, apagar) + tela de acesso via ID/senha do projeto.
 4. **Fase 4 — Aba PGQ** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-25 — ver "Fase 4 — Aba PGQ")*: formulário completo baseado no template, com sub-tabelas dinâmicas (documentos, itens avaliados, plano de avaliações).
 5. **Fase 5 — Aba Checklist** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-26 — ver "Fase 5 — Aba Checklist")*: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
 6. **Fase 6 — Fluxo de e-mail de NC** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador com envio real pelo Gmail em 2026-09-26 — ver "Fase 6 — Envio da NC por e-mail")*: formulário de envio, integração com script Python, template de comunicação.
-7. **Fase 7 — Aba Não Conformidades**: listagem, status, histórico, ação de escalonamento (reaproveitando o fluxo de e-mail da Fase 6 com campos extras).
+7. **Fase 7 — Aba Não Conformidades** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador com escalonamento real em 2026-09-26 — ver "Fase 7 — Aba Não Conformidades + escalonamento")*: listagem, status, histórico, ação de escalonamento (reaproveitando o fluxo de e-mail da Fase 6 com campos extras).
 8. **Fase 8 — Configuração de classificações/prazos por projeto**: tela para o usuário definir "Simples/Média/Alta" e seus prazos, usada pelas Fases 5 e 7.
 
 Recomenda-se pedir ao Claude Code para executar **uma fase por vez**, revisando o resultado antes de avançar.

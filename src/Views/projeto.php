@@ -45,6 +45,11 @@
         require_once __DIR__ . '/../Models/pgq.php';
         $responsavelQaPadrao = pgq_rq_nome($conexao, $projetoId) ?: $_SESSION['usuario']['nome'];
         $arquivosAba = ['css' => '/public/css/checklist.css', 'js' => '/public/js/checklist.js'];
+    } elseif ($abaAtual === 'nc') {
+        require_once __DIR__ . '/../Models/classificacoes_nc.php';
+        require_once __DIR__ . '/../Models/nao_conformidades.php';
+        $ncs = nc_listar_do_projeto($conexao, $projetoId);
+        $arquivosAba = ['css' => '/public/css/nc.css', 'js' => '/public/js/nc.js'];
     }
     $conexao->close();
 ?>
@@ -85,6 +90,8 @@
                 <?php include __DIR__ . '/abas/pgq.php'; ?>
             <?php elseif ($abaAtual === 'checklist'): ?>
                 <?php include __DIR__ . '/abas/checklist.php'; ?>
+            <?php elseif ($abaAtual === 'nc'): ?>
+                <?php include __DIR__ . '/abas/nc.php'; ?>
             <?php else: ?>
                 <p class="em-construcao">Esta aba será implementada na Fase <?= $abas[$abaAtual]['fase'] ?>.</p>
             <?php endif; ?>

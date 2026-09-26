@@ -4,7 +4,8 @@
 Chamado pelo PHP (config/email.php) na própria requisição. Recebe um JSON no stdin e
 responde um JSON no stdout:
   entrada: {"smtp": {...}, "email": {...}, "documento": {...}, "anexo_nome": "...",
-            "apenas_pdf": false}
+            "anexos_extras": [{"nome": "...", "base64": "..."}], "apenas_pdf": false}
+  (anexos_extras: PDFs já existentes enviados junto, ex.: o do 1º envio num escalonamento)
   saída:   {"ok": true, "pdf_base64": "..."}
            {"ok": false, "etapa": "entrada|pdf|smtp", "erro": "mensagem para o usuário",
             "detalhe": "mensagem técnica (vai só para o log)"}
@@ -19,6 +20,7 @@ import smtplib
 import socket
 import ssl
 import sys
+from email import policy
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from xml.sax.saxutils import escape
@@ -114,8 +116,14 @@ def gerar_pdf(doc):
     return buffer.getvalue()
 
 
-def montar_mensagem(email, pdf, anexo_nome):
-    msg = EmailMessage()
+# Cabeçalhos até o limite do RFC 5322 (998). Com o padrão (78), o Python quebra assuntos
+# longos com acentos em várias palavras codificadas e insere um espaço extra entre elas
+# ("Resolução de  Não Conformidade").
+POLITICA_EMAIL = policy.SMTP.clone(max_line_length=998)
+
+
+def montar_mensagem(email, pdf, anexo_nome, anexos_extras=()):
+    msg = EmailMessage(policy=POLITICA_EMAIL)
     msg["From"] = formataddr((email["de_nome"], email["de_email"]))
     msg["To"] = formataddr((email["para_nome"], email["para"]))
     if email.get("cc"):
@@ -126,6 +134,9 @@ def montar_mensagem(email, pdf, anexo_nome):
     msg["Message-ID"] = make_msgid(domain=email["de_email"].split("@")[-1])
     msg.set_content(email["corpo"])
     msg.add_attachment(pdf, maintype="application", subtype="pdf", filename=anexo_nome)
+    for extra in anexos_extras:
+        msg.add_attachment(base64.b64decode(extra["base64"]), maintype="application", subtype="pdf",
+                           filename=extra["nome"])
     return msg
 
 
@@ -167,14 +178,14 @@ def main():
 
     if not entrada.get("apenas_pdf"):
         try:
-            enviar(entrada["smtp"], montar_mensagem(entrada["email"], pdf, anexo_nome))
+            enviar(entrada["smtp"], montar_mensagem(entrada["email"], pdf, anexo_nome, entrada.get("anexos_extras") or []))
         except smtplib.SMTPAuthenticationError as e:
             falha("smtp", "O servidor de e-mail recusou o login da conta do sistema (verifique SMTP_USUARIO e SMTP_SENHA).", e)
         except smtplib.SMTPRecipientsRefused as e:
             falha("smtp", "O servidor de e-mail recusou o endereço do destinatário.", e)
         except (smtplib.SMTPException, socket.timeout, OSError) as e:
             falha("smtp", "Não foi possível enviar o e-mail: falha ao falar com o servidor de e-mail.", e)
-        except (KeyError, TypeError, ValueError) as e:
+        except (KeyError, TypeError, ValueError, base64.binascii.Error) as e:
             falha("entrada", "Dados inválidos para montar o e-mail.", e)
 
     responder({"ok": True, "pdf_base64": base64.b64encode(pdf).decode("ascii")}, 0)
