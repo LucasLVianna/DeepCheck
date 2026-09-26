@@ -25,7 +25,8 @@ if (projeto_do_membro($conexao, $projetoId, (int) $_SESSION['usuario']['id']) ==
 }
 
 try {
-    $atualizadoEm = pgq_salvar($conexao, $projetoId, $entrada['campos'], $entrada['linhas']);
+    $versaoVista = is_string($_POST['versao'] ?? null) ? $_POST['versao'] : '';
+    $resultado = pgq_salvar($conexao, $projetoId, $entrada['campos'], $entrada['linhas'], $versaoVista, ($_POST['sobrescrever'] ?? '') === '1');
 } catch (mysqli_sql_exception $e) {
     error_log('DeepCheck: falha ao salvar PGQ do projeto ' . $projetoId . ': ' . $e->getMessage());
     responder_json(['status' => 'nok', 'mensagem' => 'Não foi possível salvar o plano. Tente novamente.'], 500);
@@ -33,8 +34,18 @@ try {
     $conexao->close();
 }
 
+if (isset($resultado['conflito'])) {
+    $quando = $resultado['conflito'] === '' ? '' : ' em ' . date('d/m/Y H:i', strtotime($resultado['conflito']));
+    responder_json([
+        'status'   => 'nok',
+        'conflito' => true,
+        'mensagem' => "Outra pessoa salvou o plano{$quando}, depois que você abriu esta página. Se salvar agora, as alterações dela serão substituídas pelas suas."
+    ], 409);
+}
+
 responder_json([
     'status'        => 'ok',
     'mensagem'      => 'Plano de Garantia da Qualidade salvo.',
-    'atualizado_em' => date('d/m/Y H:i', strtotime($atualizadoEm))
+    'atualizado_em' => date('d/m/Y H:i', strtotime($resultado['atualizado_em'])),
+    'versao'        => $resultado['atualizado_em']
 ]);

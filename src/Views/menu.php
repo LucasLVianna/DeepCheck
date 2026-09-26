@@ -68,11 +68,19 @@
                             <dl>
                                 <dt>Código</dt>
                                 <dd><code><?= e($projeto['projeto_codigo_acesso']) ?></code></dd>
-                                <dt>Criado por</dt>
+                                <dt>Dono</dt>
                                 <dd><?= $ehCriador ? 'Você' : e($projeto['criador_nome']) ?></dd>
                                 <dt>Último acesso</dt>
                                 <dd><?= e(date('d/m/Y H:i', strtotime($projeto['acesso_em']))) ?></dd>
                             </dl>
+                            <?php if ($projeto['ncs_abertas'] > 0): ?>
+                                <p class="projeto-card-ncs">
+                                    <a href="/src/Views/projeto.php?id=<?= (int) $projeto['id'] ?>&amp;aba=nc"><?= (int) $projeto['ncs_abertas'] ?> NC(s) aberta(s)</a>
+                                    <?php if ($projeto['ncs_vencidas'] > 0): ?>
+                                        <span class="alerta-vencida"><?= (int) $projeto['ncs_vencidas'] ?> com prazo vencido</span>
+                                    <?php endif; ?>
+                                </p>
+                            <?php endif; ?>
                             <div class="projeto-card-acoes">
                                 <a class="botao" href="/src/Views/projeto.php?id=<?= (int) $projeto['id'] ?>">Abrir</a>
                                 <?php if ($ehCriador): ?>

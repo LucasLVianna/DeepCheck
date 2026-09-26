@@ -53,12 +53,14 @@ function marcarComoSalvo(campo) {
 }
 
 // Atualiza a linha com o item devolvido pelo servidor, sem mexer no campo em que o
-// usuário está digitando nem em campos com alteração ainda não enviada.
-function aplicarItem(linha, item) {
+// usuário está digitando nem em campos com alteração ainda não enviada — a menos que
+// forcar seja true (conflito de edição simultânea: a linha passa a mostrar o item atual).
+function aplicarItem(linha, item, forcar = false) {
+    linha.dataset.versao = item.versao;
     for (const campo of linha.querySelectorAll('[data-campo]')) {
         const nome = campo.dataset.campo;
         const alterado = campo.value !== campo.dataset.valorSalvo;
-        if (campo !== document.activeElement && !alterado) {
+        if (forcar || (campo !== document.activeElement && !alterado)) {
             campo.value = item[nome];
             marcarComoSalvo(campo);
         }
@@ -108,7 +110,8 @@ function salvarCampo(linha, campo) {
         const resposta = await enviarPost('/src/Controllers/checklist_item_atualizar.php', {
             item_id: linha.dataset.itemId,
             campo: campo.dataset.campo,
-            valor: campo.value
+            valor: campo.value,
+            versao: linha.dataset.versao
         });
         salvamentosPendentes--;
 
@@ -121,7 +124,11 @@ function salvarCampo(linha, campo) {
             }
             return;
         }
-        campo.value = campo.dataset.valorSalvo;
+        if (resposta.conflito) {
+            aplicarItem(linha, resposta.item, true);
+        } else {
+            campo.value = campo.dataset.valorSalvo;
+        }
         recalcularLocal();
         mostrarStatus(`Item ${linha.querySelector('.col-numero').textContent}: ${resposta.mensagem}`, false);
     });
@@ -224,6 +231,16 @@ corpoItens.addEventListener('click', (event) => {
 
 document.getElementById('cancelarEnviarNc').addEventListener('click', () => dialogNc.close());
 
+document.getElementById('previsualizarNc').addEventListener('click', async () => {
+    if (!formNc.reportValidity()) return;
+    const dados = new FormData(formNc);
+    dados.append('item_id', linhaEnvio.dataset.itemId);
+    dados.append('tipo', 'envio');
+    const erro = await abrirPdfPost('/src/Controllers/nc_previsualizar.php', dados);
+    mensagemNc.classList.toggle('mensagem-erro', erro !== null);
+    mensagemNc.textContent = erro || '';
+});
+
 formNc.addEventListener('submit', async (event) => {
     event.preventDefault();
     const botao = document.getElementById('confirmarEnviarNc');
@@ -248,6 +265,58 @@ formNc.addEventListener('submit', async (event) => {
     }
     mensagemNc.classList.add('mensagem-erro');
     mensagemNc.textContent = resposta.mensagem;
+});
+
+// --- Nome do checklist e importação de itens ---
+const CHAVE_MENSAGEM_CHECKLIST = 'deepcheck-mensagem-checklist';
+try {
+    const guardada = sessionStorage.getItem(CHAVE_MENSAGEM_CHECKLIST);
+    if (guardada) {
+        sessionStorage.removeItem(CHAVE_MENSAGEM_CHECKLIST);
+        mostrarStatus(guardada, true);
+    }
+} catch (erro) {
+    // Sem sessionStorage a mensagem só não aparece após recarregar.
+}
+
+document.getElementById('renomearChecklist').addEventListener('click', async () => {
+    const titulo = document.getElementById('nomeChecklist');
+    const nome = window.prompt('Nome do checklist:', titulo.textContent);
+    if (nome === null || nome.trim() === '' || nome.trim() === titulo.textContent) return;
+    const resposta = await enviarPost('/src/Controllers/checklist_renomear.php', { projeto_id: checklist.dataset.projetoId, nome: nome.trim() });
+    if (resposta.status === 'ok') titulo.textContent = resposta.nome;
+    mostrarStatus(resposta.mensagem, resposta.status === 'ok');
+});
+
+const dialogImportar = document.getElementById('dialogImportar');
+const formImportar = document.getElementById('formImportar');
+document.getElementById('abrirImportar').addEventListener('click', () => {
+    document.getElementById('mensagemImportar').textContent = '';
+    dialogImportar.showModal();
+});
+document.getElementById('cancelarImportar').addEventListener('click', () => dialogImportar.close());
+
+formImportar.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const botao = document.getElementById('confirmarImportar');
+    const mensagem = document.getElementById('mensagemImportar');
+    const dados = new FormData(formImportar);
+    dados.append('projeto_id', checklist.dataset.projetoId);
+
+    botao.disabled = true;
+    const resposta = await enviarPost('/src/Controllers/checklist_importar.php', dados);
+    botao.disabled = false;
+    if (resposta.status === 'ok') {
+        try {
+            sessionStorage.setItem(CHAVE_MENSAGEM_CHECKLIST, resposta.mensagem);
+        } catch (erro) {
+            // Ignorado: ver acima.
+        }
+        window.location.reload();
+        return;
+    }
+    mensagem.classList.add('mensagem-erro');
+    mensagem.textContent = resposta.mensagem;
 });
 
 window.addEventListener('beforeunload', (event) => {

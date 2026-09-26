@@ -163,7 +163,12 @@ function pgq_ler_entrada(array $post): array
 // PGQ do projeto: ['pgq' => linha de pgq ou null (ainda não salvo), '<chave da sub-tabela>' => [linhas]].
 function pgq_do_projeto(mysqli $conexao, int $projetoId): array
 {
-    $stmt = $conexao->prepare("SELECT * FROM pgq WHERE projeto_id = ?");
+    // Sem o BLOB do logo (lido só quando preciso, por pgq_logo()).
+    $stmt = $conexao->prepare(
+        "SELECT id, projeto_id, " . implode(', ', array_merge(array_keys(PGQ_CAMPOS_TEXTO), array_keys(PGQ_CAMPOS_DATA))) . ",
+                data_documento, logo_tipo, logo IS NOT NULL AS tem_logo, criado_em, atualizado_em
+           FROM pgq WHERE projeto_id = ?"
+    );
     $stmt->bind_param("i", $projetoId);
     $stmt->execute();
     $pgq = $stmt->get_result()->fetch_assoc() ?: null;
@@ -186,8 +191,11 @@ function pgq_do_projeto(mysqli $conexao, int $projetoId): array
 }
 
 // Grava o PGQ inteiro numa transação: upsert em pgq e substituição das linhas das
-// sub-tabelas. Recebe a saída de pgq_ler_entrada(). Retorna o novo atualizado_em.
-function pgq_salvar(mysqli $conexao, int $projetoId, array $campos, array $linhas): string
+// sub-tabelas. Recebe a saída de pgq_ler_entrada().
+// Edição simultânea: $versaoVista é o atualizado_em que o usuário abriu ('' = ainda não
+// salvo). Se outra pessoa salvou depois disso, não grava e retorna ['conflito' => <versão
+// atual>], a menos que $sobrescrever seja true. Em sucesso retorna ['atualizado_em' => ...].
+function pgq_salvar(mysqli $conexao, int $projetoId, array $campos, array $linhas, string $versaoVista, bool $sobrescrever): array
 {
     $colunas = array_keys($campos);
     $atualizacoes = implode(', ', array_map(fn($c) => "{$c} = novo.{$c}", $colunas));
@@ -197,6 +205,16 @@ function pgq_salvar(mysqli $conexao, int $projetoId, array $campos, array $linha
 
     $conexao->begin_transaction();
     try {
+        $stmt = $conexao->prepare("SELECT atualizado_em FROM pgq WHERE projeto_id = ? FOR UPDATE");
+        $stmt->bind_param("i", $projetoId);
+        $stmt->execute();
+        $versaoAtual = (string) ($stmt->get_result()->fetch_row()[0] ?? '');
+        $stmt->close();
+        if (!$sobrescrever && $versaoAtual !== $versaoVista) {
+            $conexao->rollback();
+            return ['conflito' => $versaoAtual];
+        }
+
         $stmt = $conexao->prepare($sql);
         $valores = array_values($campos);
         $stmt->bind_param('i' . str_repeat('s', count($colunas)), $projetoId, ...$valores);
@@ -239,7 +257,7 @@ function pgq_salvar(mysqli $conexao, int $projetoId, array $campos, array $linha
         throw $e;
     }
 
-    return $atualizadoEm;
+    return ['atualizado_em' => $atualizadoEm];
 }
 
 // Nome do RQ (Representante da Qualidade) do PGQ do projeto, se preenchido.
@@ -251,4 +269,72 @@ function pgq_rq_nome(mysqli $conexao, int $projetoId): ?string
     $linha = $stmt->get_result()->fetch_row();
     $stmt->close();
     return $linha[0] ?? null;
+}
+
+// --- Logo do projeto (capa do PGQ) ---
+
+const PGQ_LOGO_MAX_BYTES = 1048576; // 1 MB
+const PGQ_LOGO_TIPOS = ['image/png' => 'PNG', 'image/jpeg' => 'JPG'];
+const PGQ_LOGO_MAX_PIXELS = 4000;
+
+// Valida o arquivo enviado ($_FILES['logo']) pelo conteúdo, não pela extensão.
+// Retorna ['erro' => ...] ou ['dados' => bytes, 'tipo' => mime].
+function pgq_ler_logo(?array $arquivo): array
+{
+    if (!$arquivo || ($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['erro' => 'Escolha uma imagem PNG ou JPG.'];
+    }
+    if (in_array($arquivo['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || $arquivo['size'] > PGQ_LOGO_MAX_BYTES) {
+        return ['erro' => 'O logo pode ter no máximo 1 MB.'];
+    }
+    if ($arquivo['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($arquivo['tmp_name'])) {
+        return ['erro' => 'Não foi possível receber o arquivo. Tente novamente.'];
+    }
+    $tipo = (new finfo(FILEINFO_MIME_TYPE))->file($arquivo['tmp_name']);
+    $dimensoes = @getimagesize($arquivo['tmp_name']);
+    if (!isset(PGQ_LOGO_TIPOS[$tipo]) || $dimensoes === false) {
+        return ['erro' => 'O logo precisa ser uma imagem PNG ou JPG.'];
+    }
+    if ($dimensoes[0] > PGQ_LOGO_MAX_PIXELS || $dimensoes[1] > PGQ_LOGO_MAX_PIXELS) {
+        return ['erro' => 'O logo pode ter no máximo ' . PGQ_LOGO_MAX_PIXELS . ' × ' . PGQ_LOGO_MAX_PIXELS . ' pixels.'];
+    }
+    return ['dados' => file_get_contents($arquivo['tmp_name']), 'tipo' => $tipo];
+}
+
+// Grava (ou remove, com $logo null) o logo. Não altera atualizado_em de um PGQ existente,
+// para não gerar falso conflito de edição simultânea com quem está editando o plano;
+// se o PGQ ainda não existia, ele é criado. Retorna o atualizado_em atual do PGQ.
+function pgq_salvar_logo(mysqli $conexao, int $projetoId, ?array $logo): string
+{
+    $dados = $logo['dados'] ?? null;
+    $tipo = $logo['tipo'] ?? null;
+    $stmt = $conexao->prepare(
+        "INSERT INTO pgq (projeto_id, logo, logo_tipo) VALUES (?, ?, ?) AS novo
+         ON DUPLICATE KEY UPDATE logo = novo.logo, logo_tipo = novo.logo_tipo, atualizado_em = pgq.atualizado_em"
+    );
+    $nulo = null;
+    $stmt->bind_param("ibs", $projetoId, $nulo, $tipo);
+    if ($dados !== null) {
+        $stmt->send_long_data(1, $dados);
+    }
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conexao->prepare("SELECT atualizado_em FROM pgq WHERE projeto_id = ?");
+    $stmt->bind_param("i", $projetoId);
+    $stmt->execute();
+    $versao = $stmt->get_result()->fetch_row()[0];
+    $stmt->close();
+    return $versao;
+}
+
+// Logo do projeto: ['dados' => bytes, 'tipo' => mime] ou null.
+function pgq_logo(mysqli $conexao, int $projetoId): ?array
+{
+    $stmt = $conexao->prepare("SELECT logo, logo_tipo FROM pgq WHERE projeto_id = ? AND logo IS NOT NULL");
+    $stmt->bind_param("i", $projetoId);
+    $stmt->execute();
+    $linha = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $linha ? ['dados' => $linha['logo'], 'tipo' => $linha['logo_tipo']] : null;
 }

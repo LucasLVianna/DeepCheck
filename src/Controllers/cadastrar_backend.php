@@ -1,37 +1,18 @@
 <?php
 require_once __DIR__ . '/../../config/auth.php';
+require_once __DIR__ . '/../Models/usuarios.php';
 
 exigir_post_com_csrf();
 
-$nome = trim((string) ($_POST['nome'] ?? ''));
-$email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-$senha = (string) ($_POST['senha'] ?? '');
-$cepNumerico = preg_replace('/\D/', '', (string) ($_POST['cep'] ?? ''));
+$texto = fn($chave) => is_string($_POST[$chave] ?? null) ? $_POST[$chave] : '';
+$nome = trim($texto('nome'));
+$email = usuario_normalizar_email($texto('email'));
+$senha = $texto('senha');
+$cepNumerico = usuario_normalizar_cep($texto('cep'));
 
-if ($nome === '' || $email === '' || $senha === '' || strlen($cepNumerico) !== 8) {
-    responder_json([
-        'status' => 'nok',
-        'mensagem' => 'Informe nome, e-mail, senha e um CEP válido no formato 00000-000.'
-    ], 400);
-}
-
-if (mb_strlen($nome) > 100) {
-    responder_json(['status' => 'nok', 'mensagem' => 'O nome pode ter no máximo 100 caracteres.'], 400);
-}
-
-if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) {
-    responder_json(['status' => 'nok', 'mensagem' => 'Digite um e-mail válido.'], 400);
-}
-
-// Mesma regra validada no front-end (public/js/cadastrar.js). O limite de 72 bytes
-// é o máximo que o bcrypt considera; acima disso o restante seria ignorado.
-if (strlen($senha) < 8 || strlen($senha) > 72
-    || !preg_match('/[A-Z]/', $senha) || !preg_match('/[a-z]/', $senha)
-    || !preg_match('/[0-9]/', $senha) || !preg_match('/[@$!%*?&]/', $senha)) {
-    responder_json([
-        'status' => 'nok',
-        'mensagem' => 'A senha deve ter entre 8 e 72 caracteres, com letras maiúsculas, minúsculas, números e caracteres especiais (@$!%*?&).'
-    ], 400);
+$erro = usuario_validar_nome($nome) ?? usuario_validar_email($email) ?? usuario_validar_cep($cepNumerico) ?? usuario_validar_senha($senha);
+if ($erro !== null) {
+    responder_json(['status' => 'nok', 'mensagem' => $erro], 400);
 }
 
 require_once __DIR__ . '/../../config/conexao.php';

@@ -111,9 +111,37 @@ function classificacao_recalcular_itens(mysqli $conexao, array $classificacao): 
     return count($itens);
 }
 
-// Cria ($id null) ou atualiza a classificação. Ao atualizar com prazo diferente, recalcula
-// os itens com NC não enviada. Retorna ['id' => ..., 'recalculados' => n].
-function classificacao_salvar(mysqli $conexao, int $projetoId, ?array $atual, array $dados): array
+// Histórico de alterações das classificações do projeto (mais recentes primeiro).
+function classificacoes_historico(mysqli $conexao, int $projetoId, int $limite = 30): array
+{
+    $stmt = $conexao->prepare(
+        "SELECT h.acao, h.descricao, h.criado_em, u.nome_usuario
+           FROM classificacoes_nc_historico h
+           JOIN usuario u ON u.id = h.usuario_id
+          WHERE h.projeto_id = ?
+          ORDER BY h.id DESC
+          LIMIT ?"
+    );
+    $stmt->bind_param("ii", $projetoId, $limite);
+    $stmt->execute();
+    $historico = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return array_map(fn($h) => $h + ['quando' => date('d/m/Y H:i', strtotime($h['criado_em']))], $historico);
+}
+
+function classificacao_registrar_historico(mysqli $conexao, int $projetoId, int $usuarioId, string $acao, string $descricao): void
+{
+    $descricao = mb_substr($descricao, 0, 500);
+    $stmt = $conexao->prepare("INSERT INTO classificacoes_nc_historico (projeto_id, usuario_id, acao, descricao) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("iiss", $projetoId, $usuarioId, $acao, $descricao);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Cria ($atual null) ou atualiza a classificação e registra no histórico. Ao atualizar
+// com prazo diferente, recalcula os itens com NC não enviada.
+// Retorna ['id' => ..., 'recalculados' => n].
+function classificacao_salvar(mysqli $conexao, int $projetoId, ?array $atual, array $dados, int $usuarioId): array
 {
     $conexao->begin_transaction();
     try {
@@ -124,6 +152,8 @@ function classificacao_salvar(mysqli $conexao, int $projetoId, ?array $atual, ar
             $id = $conexao->insert_id;
             $stmt->close();
             $recalculados = 0;
+            classificacao_registrar_historico($conexao, $projetoId, $usuarioId, 'criada',
+                "\"{$dados['nome']}\" criada com prazo de " . classificacao_prazo_texto($dados) . '.');
         } else {
             $id = (int) $atual['id'];
             $stmt = $conexao->prepare("UPDATE classificacoes_nc SET nome = ?, prazo_valor = ?, prazo_unidade = ? WHERE id = ?");
@@ -132,6 +162,19 @@ function classificacao_salvar(mysqli $conexao, int $projetoId, ?array $atual, ar
             $stmt->close();
             $prazoMudou = (int) $atual['prazo_valor'] !== $dados['prazo_valor'] || $atual['prazo_unidade'] !== $dados['prazo_unidade'];
             $recalculados = $prazoMudou ? classificacao_recalcular_itens($conexao, ['id' => $id] + $dados) : 0;
+
+            $mudancas = [];
+            if ($atual['nome'] !== $dados['nome']) {
+                $mudancas[] = "nome \"{$atual['nome']}\" → \"{$dados['nome']}\"";
+            }
+            if ($prazoMudou) {
+                $mudancas[] = 'prazo ' . classificacao_prazo_texto($atual) . ' → ' . classificacao_prazo_texto($dados)
+                    . ($recalculados ? " ({$recalculados} item(ns) não enviado(s) recalculado(s))" : '');
+            }
+            if ($mudancas) {
+                classificacao_registrar_historico($conexao, $projetoId, $usuarioId, 'alterada',
+                    "\"{$dados['nome']}\": " . implode('; ', $mudancas) . '.');
+            }
         }
         $conexao->commit();
     } catch (Throwable $e) {
@@ -141,24 +184,32 @@ function classificacao_salvar(mysqli $conexao, int $projetoId, ?array $atual, ar
     return ['id' => $id, 'recalculados' => $recalculados];
 }
 
-function classificacoes_quantidade(mysqli $conexao, int $projetoId): int
-{
-    $stmt = $conexao->prepare("SELECT COUNT(*) FROM classificacoes_nc WHERE projeto_id = ?");
-    $stmt->bind_param("i", $projetoId);
-    $stmt->execute();
-    $quantidade = (int) $stmt->get_result()->fetch_row()[0];
-    $stmt->close();
-    return $quantidade;
-}
 
-// Exclui a classificação. Se estiver em uso, $substituta (outra classificação do mesmo
-// projeto) passa a ser usada nos itens do checklist e nas NCs; itens com NC não enviada
-// têm a data prevista recalculada com a substituta. Tudo numa transação.
-// Retorna ['itens' => n, 'ncs' => n, 'recalculados' => n].
-function classificacao_excluir(mysqli $conexao, array $classificacao, ?array $substituta): array
+// Exclui a classificação e registra no histórico. Se estiver em uso, $substituta (outra
+// classificação do mesmo projeto) passa a ser usada nos itens do checklist e nas NCs;
+// itens com NC não enviada têm a data prevista recalculada com a substituta. Tudo numa
+// transação que trava as classificações do projeto, para duas exclusões simultâneas não
+// deixarem o projeto sem nenhuma.
+// Retorna ['erro' => ...] ou ['itens' => n, 'ncs' => n, 'recalculados' => n].
+function classificacao_excluir(mysqli $conexao, array $classificacao, ?array $substituta, int $usuarioId): array
 {
+    $projetoId = (int) $classificacao['projeto_id'];
     $conexao->begin_transaction();
     try {
+        $stmt = $conexao->prepare("SELECT id FROM classificacoes_nc WHERE projeto_id = ? FOR UPDATE");
+        $stmt->bind_param("i", $projetoId);
+        $stmt->execute();
+        $ids = array_column($stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'id');
+        $stmt->close();
+        if (!in_array($classificacao['id'], $ids) || ($substituta !== null && !in_array($substituta['id'], $ids))) {
+            $conexao->rollback();
+            return ['erro' => 'A classificação foi alterada por outra pessoa. Recarregue a página.'];
+        }
+        if (count($ids) <= 1) {
+            $conexao->rollback();
+            return ['erro' => 'O projeto precisa ter pelo menos uma classificação.'];
+        }
+
         $itens = $ncs = $recalculados = 0;
         if ($substituta !== null) {
             $stmt = $conexao->prepare("UPDATE checklist_itens SET classificacao_nc_id = ? WHERE classificacao_nc_id = ?");
@@ -180,6 +231,12 @@ function classificacao_excluir(mysqli $conexao, array $classificacao, ?array $su
         $stmt->bind_param("i", $classificacao['id']);
         $stmt->execute();
         $stmt->close();
+
+        $descricao = "\"{$classificacao['nome']}\" (" . classificacao_prazo_texto($classificacao) . ') excluída';
+        if ($substituta !== null) {
+            $descricao .= "; substituída por \"{$substituta['nome']}\" em {$itens} item(ns) do checklist e {$ncs} NC(s)";
+        }
+        classificacao_registrar_historico($conexao, $projetoId, $usuarioId, 'excluida', $descricao . '.');
         $conexao->commit();
     } catch (Throwable $e) {
         $conexao->rollback();

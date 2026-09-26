@@ -1,8 +1,9 @@
 <?php
 // Aba "Plano de Garantia da Qualidade" — incluída por src/Views/projeto.php, que carrega
-// $projeto, $pgq (pgq_do_projeto) e $classificacoes (classificacoes_com_uso).
+// $projeto, $pgq (pgq_do_projeto), $classificacoes (classificacoes_com_uso) e
+// $historicoClassificacoes (classificacoes_historico).
 // Seções e colunas seguem o template "Plano de Garantia da Qualidade".
-if (!isset($projeto, $pgq, $classificacoes)) {
+if (!isset($projeto, $pgq, $classificacoes, $historicoClassificacoes)) {
     http_response_code(404);
     exit;
 }
@@ -29,9 +30,24 @@ function pgq_linha_html(string $chave, array $linha = []): string
 ?>
 <form id="formPgq" class="pgq" novalidate>
     <input type="hidden" name="projeto_id" value="<?= (int) $projeto['id'] ?>">
+    <?php // Versão aberta (edição simultânea): o servidor recusa se outra pessoa salvou depois. ?>
+    <input type="hidden" name="versao" value="<?= e($dados['atualizado_em'] ?? '') ?>">
 
     <section class="pgq-secao">
         <h3>Capa</h3>
+        <?php // Logo: enviado/removido na hora pelos botões (o campo não tem "name", não vai no "Salvar" do plano). ?>
+        <div class="pgq-logo" id="pgqLogo" data-projeto-id="<?= (int) $projeto['id'] ?>">
+            <img id="pgqLogoImagem" alt="Logo do projeto"<?= empty($dados['tem_logo']) ? ' hidden' : '' ?>
+                 src="<?= empty($dados['tem_logo']) ? '' : '/src/Controllers/pgq_logo_imagem.php?projeto=' . (int) $projeto['id'] . '&amp;v=' . e(strtotime($dados['atualizado_em'])) ?>">
+            <p class="dica" id="pgqLogoVazio"<?= empty($dados['tem_logo']) ? '' : ' hidden' ?>>Nenhum logo. Ele aparece na capa do PDF do plano.</p>
+            <div class="pgq-logo-acoes">
+                <label for="pgqLogoArquivo">Logo do projeto (PNG ou JPG, até 1 MB)</label>
+                <input type="file" id="pgqLogoArquivo" accept="image/png,image/jpeg">
+                <button type="button" id="pgqLogoEnviar">Enviar logo</button>
+                <button type="button" id="pgqLogoRemover" class="botao-perigo"<?= empty($dados['tem_logo']) ? ' hidden' : '' ?>>Remover logo</button>
+            </div>
+            <p class="mensagem" id="pgqLogoMensagem" role="status"></p>
+        </div>
         <div class="pgq-grade">
             <label>Autor/Responsável por GQA
                 <input type="text" name="autor_gqa" maxlength="<?= PGQ_CAMPOS_TEXTO['autor_gqa']['max'] ?>" value="<?= e($dados['autor_gqa'] ?? '') ?>">
@@ -141,7 +157,7 @@ function pgq_linha_html(string $chave, array $linha = []): string
         <h3>6. Definição das Não-Conformidades</h3>
         <p class="pgq-descricao">Gravidade de cada tipo de não conformidade e prazo de resolução (contado em dias úteis, sem sábados e domingos):</p>
         <?php // Editor de classificações: salvo na hora, a cada ação (fora do botão "Salvar" do plano). Os campos não têm "name" para não irem no POST do PGQ. ?>
-        <div class="classificacoes" id="classificacoes" data-projeto-id="<?= (int) $projeto['id'] ?>" data-classificacoes="<?= e(json_encode($classificacoes, JSON_UNESCAPED_UNICODE)) ?>">
+        <div class="classificacoes" id="classificacoes" data-projeto-id="<?= (int) $projeto['id'] ?>" data-classificacoes="<?= e(json_encode($classificacoes, JSON_UNESCAPED_UNICODE)) ?>" data-historico="<?= e(json_encode($historicoClassificacoes, JSON_UNESCAPED_UNICODE)) ?>">
             <div class="tabela-rolagem">
                 <table class="pgq-tabela classificacoes-tabela">
                     <thead>
@@ -184,6 +200,10 @@ function pgq_linha_html(string $chave, array $linha = []): string
                 </tr>
             </template>
             <p class="mensagem" id="mensagemClassificacoes" role="status"></p>
+            <details class="classificacoes-historico">
+                <summary>Histórico de alterações das classificações</summary>
+                <ul id="historicoClassificacoes"></ul>
+            </details>
             <p class="dica">As classificações são salvas na hora (não dependem do botão "Salvar" do plano). Ao mudar o prazo, a data prevista dos itens do checklist com NC <strong>ainda não enviada</strong> é recalculada; NCs já enviadas mantêm o prazo comunicado. Para excluir uma classificação em uso, escolha outra para substituí-la.</p>
         </div>
         <label for="pgqDefinicaoNc">Regras e observações sobre as não-conformidades</label>

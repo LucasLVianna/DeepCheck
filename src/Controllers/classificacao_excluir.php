@@ -23,12 +23,13 @@ if ($classificacao === null) {
 }
 $projetoId = (int) $classificacao['projeto_id'];
 
-if (classificacoes_quantidade($conexao, $projetoId) <= 1) {
+$classificacoesDoProjeto = array_column(classificacoes_com_uso($conexao, $projetoId), null, 'id');
+// Checagem antecipada só para a mensagem; a regra é garantida dentro da transação do Model.
+if (count($classificacoesDoProjeto) <= 1) {
     $conexao->close();
     responder_json(['status' => 'nok', 'mensagem' => 'O projeto precisa ter pelo menos uma classificação.'], 409);
 }
-
-$uso = array_column(classificacoes_com_uso($conexao, $projetoId), null, 'id')[$id];
+$uso = $classificacoesDoProjeto[$id];
 $emUso = $uso['itens_em_uso'] > 0 || $uso['ncs_em_uso'] > 0;
 
 $substituta = null;
@@ -50,7 +51,7 @@ if ($emUso) {
 }
 
 try {
-    $resultado = classificacao_excluir($conexao, $classificacao, $substituta);
+    $resultado = classificacao_excluir($conexao, $classificacao, $substituta, $usuarioId);
 } catch (mysqli_sql_exception $e) {
     $conexao->close();
     error_log('DeepCheck: falha ao excluir classificação ' . $id . ': ' . $e->getMessage());
@@ -62,11 +63,17 @@ try {
     ], $e->getCode() == 1451 ? 409 : 500);
 }
 
+if (isset($resultado['erro'])) {
+    $conexao->close();
+    responder_json(['status' => 'nok', 'mensagem' => $resultado['erro']], 409);
+}
+
 $lista = classificacoes_com_uso($conexao, $projetoId);
+$historico = classificacoes_historico($conexao, $projetoId);
 $conexao->close();
 
 $mensagem = "Classificação \"{$classificacao['nome']}\" excluída.";
 if ($substituta !== null) {
     $mensagem .= " Substituída por \"{$substituta['nome']}\" em {$resultado['itens']} item(ns) do checklist e {$resultado['ncs']} NC(s).";
 }
-responder_json(['status' => 'ok', 'mensagem' => $mensagem, 'classificacoes' => $lista]);
+responder_json(['status' => 'ok', 'mensagem' => $mensagem, 'classificacoes' => $lista, 'historico' => $historico]);

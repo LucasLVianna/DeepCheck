@@ -26,7 +26,7 @@ if ($projeto === null) {
 }
 if ((int) $projeto['criado_por'] !== $usuarioId) {
     $conexao->close();
-    responder_json(['status' => 'nok', 'mensagem' => 'Apenas quem criou o projeto pode renomeá-lo.'], 403);
+    responder_json(['status' => 'nok', 'mensagem' => 'Apenas o dono do projeto pode renomeá-lo.'], 403);
 }
 
 projeto_renomear($conexao, $projetoId, $nome);

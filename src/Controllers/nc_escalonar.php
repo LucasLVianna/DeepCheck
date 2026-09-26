@@ -68,12 +68,14 @@ try {
     }
 
     $escalonamentoId = nc_registrar_escalonamento($conexao, $nc, $escalonamento, $usuarioId, $agora);
+    $emailResponsavelAnterior = $nc['responsavel_email'];
     $nc['numero_escalonamento'] = $numeroAtual + 1;
     $nc['responsavel_resolucao'] = $escalonamento['responsavel_resolucao'];
+    $nc['responsavel_email'] = $escalonamento['responsavel_email'];
 
     $texto = nc_texto_escalonamento($nc['projeto_nome'], $escalonamento['superior_nome'], $nc['responsavel_qa'], $nc['numero_escalonamento']);
     $cc = nc_lista_cc(
-        array_merge([$nc['responsavel_email']], nc_envolvidos($conexao, $ncId), [$usuario['email_usuario']]),
+        array_merge([$escalonamento['responsavel_email'], $emailResponsavelAnterior], nc_envolvidos($conexao, $ncId), [$usuario['email_usuario']]),
         $escalonamento['superior_email']
     );
     $anexoNome = nc_nome_anexo((int) $nc['numero_item'], $nc['numero_escalonamento']);

@@ -213,3 +213,34 @@
 .obrigatorio {
     color: red;
 }
+
+.checklist-topo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.checklist-topo h3 {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.checklist-topo-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.opcao-importar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-weight: 600;
+}
+
+.dialog-nc select {
+    font: inherit;
+}

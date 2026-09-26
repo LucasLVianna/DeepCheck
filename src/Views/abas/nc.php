@@ -59,7 +59,7 @@ foreach ($ncs as $i => $nc) {
                  data-item-id="<?= (int) $nc['checklist_item_id'] ?>"
                  data-numero-item="<?= (int) $nc['numero_item'] ?>"
                  data-numero-escalonamento="<?= (int) $nc['numero_escalonamento'] ?>"
-                 data-responsavel="<?= e($nc['escalonamentos'] ? end($nc['escalonamentos'])['responsavel_resolucao'] : $nc['responsavel_resolucao']) ?>"
+                 data-responsavel="<?= e($nc['responsavel_resolucao']) ?>"
                  data-responsavel-email="<?= e($nc['responsavel_email']) ?>"
                  data-prazo-atual="<?= $formatar($nc['prazo_atual']) ?>"
                  data-prazo-sugerido="<?= e($prazoSugerido) ?>"
@@ -189,6 +189,9 @@ foreach ($ncs as $i => $nc) {
             <label for="escResponsavel">Responsável pela resolução <span class="obrigatorio">*</span></label>
             <input type="text" id="escResponsavel" name="responsavel_resolucao" maxlength="150" required>
 
+            <label for="escResponsavelEmail">E-mail do responsável pela resolução <span class="obrigatorio">*</span></label>
+            <input type="email" id="escResponsavelEmail" name="responsavel_email" maxlength="255" required>
+
             <label for="escNovoPrazo">Novo prazo para resolução <span class="obrigatorio">*</span></label>
             <input type="date" id="escNovoPrazo" name="novo_prazo" required>
             <p class="dica" id="escPrazoDica"></p>
@@ -199,6 +202,7 @@ foreach ($ncs as $i => $nc) {
             <p class="mensagem" id="mensagemEscalonar" role="status"></p>
             <div class="dialog-nc-acoes">
                 <button type="button" id="cancelarEscalonar">Cancelar</button>
+                <button type="button" id="previsualizarEscalonamento">Pré-visualizar PDF</button>
                 <button type="submit" id="confirmarEscalonar">Enviar escalonamento</button>
             </div>
         </form>

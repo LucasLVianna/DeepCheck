@@ -68,19 +68,7 @@ $entradaScript = nc_entrada_script(
     $item['responsavel_resolucao'],
     $cc,
     $texto,
-    [
-        'projeto'                   => $projeto['nome'],
-        'responsavel_resolucao'     => $item['responsavel_resolucao'],
-        'responsavel_qa'            => $envio['responsavel_qa'],
-        'data_primeira_solicitacao' => nc_formatar_data($agora),
-        'prazo_resolucao'           => nc_formatar_data($item['data_prevista_resolucao']),
-        'numero_escalonamento'      => 0,
-        'descricao'                 => $item['descricao'],
-        'classificacao'             => $classificacao['nome'] . ' | ' . classificacao_prazo_texto($classificacao),
-        'acao_corretiva'            => $item['acao_corretiva_indicada'],
-        'historico'                 => [],
-        'observacoes'               => $envio['observacoes'],
-    ],
+    nc_documento_envio($projeto['nome'], $item, $classificacao, $envio, $agora),
     $anexoNome
 );
 

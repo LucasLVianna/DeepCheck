@@ -25,9 +25,16 @@ formPgq.addEventListener('click', (event) => {
 });
 
 formPgq.addEventListener('input', (event) => {
-    // O editor de classificações (seção 6) salva na hora; não conta como alteração do plano.
-    if (!event.target.closest('#classificacoes')) {
+    // O editor de classificações (seção 6) e o logo salvam na hora; não contam como alteração do plano.
+    if (!event.target.closest('#classificacoes, #pgqLogo')) {
         alteracoesPendentes = true;
+    }
+});
+
+// O PDF exportado usa a versão salva do plano.
+document.getElementById('exportarPdf').addEventListener('click', (event) => {
+    if (alteracoesPendentes && !window.confirm('Há alterações não salvas. O PDF será gerado com a última versão salva do plano. Continuar?')) {
+        event.preventDefault();
     }
 });
 
@@ -47,7 +54,13 @@ formPgq.addEventListener('submit', async (event) => {
     mensagemPgq.textContent = 'Salvando...';
     mensagemPgq.classList.remove('mensagem-sucesso', 'mensagem-erro');
 
-    const resposta = await enviarPost('/src/Controllers/pgq_salvar.php', new FormData(formPgq));
+    let resposta = await enviarPost('/src/Controllers/pgq_salvar.php', new FormData(formPgq));
+    // Edição simultânea: outra pessoa salvou depois que a página foi aberta.
+    if (resposta.conflito && window.confirm(`${resposta.mensagem}\n\nOK = salvar mesmo assim (substituir)\nCancelar = não salvar agora (recarregue a página para ver a versão atual)`)) {
+        const dados = new FormData(formPgq);
+        dados.append('sobrescrever', '1');
+        resposta = await enviarPost('/src/Controllers/pgq_salvar.php', dados);
+    }
     botao.disabled = false;
 
     const sucesso = resposta.status === 'ok';
@@ -58,6 +71,7 @@ formPgq.addEventListener('submit', async (event) => {
     if (sucesso) {
         alteracoesPendentes = false;
         document.getElementById('pgqAtualizadoEm').textContent = resposta.atualizado_em;
+        formPgq.versao.value = resposta.versao;
     }
 });
 
@@ -68,6 +82,25 @@ const mensagemClassificacoes = document.getElementById('mensagemClassificacoes')
 const dialogExcluir = document.getElementById('dialogExcluirClassificacao');
 const formExcluir = document.getElementById('formExcluirClassificacao');
 let listaClassificacoes = JSON.parse(classificacoes.dataset.classificacoes);
+let historicoClassificacoes = JSON.parse(classificacoes.dataset.historico);
+
+function renderizarHistorico() {
+    const lista = document.getElementById('historicoClassificacoes');
+    if (!historicoClassificacoes.length) {
+        const vazio = document.createElement('li');
+        vazio.textContent = 'Nenhuma alteração registrada.';
+        lista.replaceChildren(vazio);
+        return;
+    }
+    lista.replaceChildren(...historicoClassificacoes.map((h) => {
+        const item = document.createElement('li');
+        const quando = document.createElement('span');
+        quando.className = 'historico-quando';
+        quando.textContent = `${h.quando} · ${h.nome_usuario}`;
+        item.append(quando, document.createTextNode(` — ${h.descricao}`));
+        return item;
+    }));
+}
 let classificacaoExcluindo = null;
 
 function mostrarMensagemClassificacoes(texto, sucesso) {
@@ -117,7 +150,10 @@ async function salvarClassificacao(linha, botao) {
         return;
     }
     listaClassificacoes = resposta.classificacoes;
+    historicoClassificacoes = resposta.historico;
     renderizarClassificacoes();
+renderizarHistorico();
+    renderizarHistorico();
     if (!linha.dataset.id) {
         linha.querySelectorAll('input').forEach((campo) => { campo.value = ''; });
     }
@@ -128,7 +164,9 @@ async function excluirClassificacao(id, substitutaId) {
     const resposta = await enviarPost('/src/Controllers/classificacao_excluir.php', { id, substituta_id: substitutaId || '' });
     if (resposta.status === 'ok') {
         listaClassificacoes = resposta.classificacoes;
+        historicoClassificacoes = resposta.historico;
         renderizarClassificacoes();
+        renderizarHistorico();
         mostrarMensagemClassificacoes(resposta.mensagem, true);
     }
     return resposta;
@@ -190,3 +228,50 @@ formExcluir.addEventListener('submit', async (event) => {
 });
 
 renderizarClassificacoes();
+
+// --- Logo do projeto (capa) — salvo na hora, separado do "Salvar" do plano ---
+const pgqLogo = document.getElementById('pgqLogo');
+const logoImagem = document.getElementById('pgqLogoImagem');
+const logoMensagem = document.getElementById('pgqLogoMensagem');
+
+async function acaoLogo(acao, arquivo) {
+    const dados = new FormData();
+    dados.append('projeto_id', pgqLogo.dataset.projetoId);
+    dados.append('acao', acao);
+    if (arquivo) dados.append('logo', arquivo);
+    const resposta = await enviarPost('/src/Controllers/pgq_logo.php', dados);
+
+    logoMensagem.textContent = resposta.mensagem;
+    logoMensagem.classList.toggle('mensagem-sucesso', resposta.status === 'ok');
+    logoMensagem.classList.toggle('mensagem-erro', resposta.status !== 'ok');
+    if (resposta.status !== 'ok') return;
+
+    // Se o plano ainda não existia, o envio do logo o criou: a tela passa a ter essa versão.
+    if (formPgq.versao.value === '') formPgq.versao.value = resposta.versao;
+    logoImagem.hidden = !resposta.tem_logo;
+    document.getElementById('pgqLogoVazio').hidden = resposta.tem_logo;
+    document.getElementById('pgqLogoRemover').hidden = !resposta.tem_logo;
+    if (resposta.tem_logo) {
+        logoImagem.src = `/src/Controllers/pgq_logo_imagem.php?projeto=${pgqLogo.dataset.projetoId}&v=${Date.now()}`;
+    }
+    document.getElementById('pgqLogoArquivo').value = '';
+}
+
+document.getElementById('pgqLogoEnviar').addEventListener('click', () => {
+    const arquivo = document.getElementById('pgqLogoArquivo').files[0];
+    if (!arquivo) {
+        logoMensagem.textContent = 'Escolha uma imagem PNG ou JPG.';
+        logoMensagem.classList.add('mensagem-erro');
+        return;
+    }
+    if (arquivo.size > 1048576) {
+        logoMensagem.textContent = 'O logo pode ter no máximo 1 MB.';
+        logoMensagem.classList.add('mensagem-erro');
+        return;
+    }
+    acaoLogo('enviar', arquivo);
+});
+
+document.getElementById('pgqLogoRemover').addEventListener('click', () => {
+    if (window.confirm('Remover o logo do projeto?')) acaoLogo('remover');
+});

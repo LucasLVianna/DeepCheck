@@ -11,6 +11,7 @@
     <div>
         <nav>
             <a href="/src/Views/menu.php">Início</a>
+            <a href="/src/Views/perfil.php">Perfil</a>
 
             <?php if (isset($_SESSION['usuario']['nome'])): ?>
                 <span class="usuarioLogado"><?= htmlspecialchars($_SESSION['usuario']['nome'], ENT_QUOTES, 'UTF-8') ?></span>

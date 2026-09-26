@@ -1,0 +1,103 @@
+.perfil {
+    display: grid;
+    gap: 1.5rem;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.perfil-cabecalho h1 {
+    margin: 0.5rem 0 0.25rem;
+}
+
+.painel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1.25rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.painel h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.2rem;
+}
+
+.painel input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    font: inherit;
+}
+
+.painel button[type="submit"] {
+    align-self: flex-start;
+    margin-top: 0.5rem;
+}
+
+.dica {
+    margin: 0;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.mensagem {
+    min-height: 1.2em;
+    margin: 0;
+}
+
+.mensagem-erro {
+    color: #c62828;
+}
+
+.mensagem-sucesso {
+    color: #2e7d32;
+}
+
+.campo-senha {
+    position: relative;
+}
+
+.campo-senha input {
+    padding-right: 5rem;
+}
+
+.botao-mostrar-senha {
+    position: absolute;
+    top: 50%;
+    right: 0.3rem;
+    transform: translateY(-50%);
+    padding: 0.2rem 0.5rem;
+    font: inherit;
+    font-size: 0.8rem;
+    border: 0;
+    background: transparent;
+    color: #3d63d8;
+    cursor: pointer;
+}
+
+.requisitos-senha {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.2rem 0.75rem;
+    margin: 0.2rem 0 0.4rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.82rem;
+    color: #666;
+}
+
+.requisitos-senha li::before {
+    content: "○";
+    display: inline-block;
+    width: 1.1rem;
+}
+
+.requisitos-senha li.atendido {
+    color: #2e7d32;
+}
+
+.requisitos-senha li.atendido::before {
+    content: "✓";
+}

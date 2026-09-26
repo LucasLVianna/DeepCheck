@@ -1,9 +1,10 @@
 <?php
 // Aba "Checklist de Qualidade" — incluída por src/Views/projeto.php, que carrega $projeto,
 // $itens (checklist_itens), $classificacoes, $indicadores (checklist_indicadores) e
-// $responsavelQaPadrao (RQ do PGQ ou nome do usuário, usado no formulário de envio da NC).
+// $responsavelQaPadrao (RQ do PGQ ou nome do usuário, usado no formulário de envio da NC),
+// $checklist (null antes do 1º item) e $projetosParaCopiar (origem para importar itens).
 // Colunas seguem o template "Modelo Checklist - Processo de Qualidade".
-if (!isset($projeto, $itens, $classificacoes, $indicadores, $responsavelQaPadrao)) {
+if (!isset($projeto, $itens, $classificacoes, $indicadores, $responsavelQaPadrao, $projetosParaCopiar)) {
     http_response_code(404);
     exit;
 }
@@ -12,6 +13,14 @@ require_once __DIR__ . '/checklist_linha.php';
 $aderencia = $indicadores['aderencia'] === null ? '—' : number_format($indicadores['aderencia'], 2, ',', '.') . '%';
 ?>
 <div class="checklist" id="checklist" data-projeto-id="<?= (int) $projeto['id'] ?>" data-responsavel-qa="<?= e($responsavelQaPadrao) ?>">
+    <div class="checklist-topo">
+        <h3 id="nomeChecklist"><?= e($checklist['nome'] ?? CHECKLIST_NOME_PADRAO) ?></h3>
+        <div class="checklist-topo-acoes">
+            <button type="button" id="renomearChecklist">Renomear</button>
+            <button type="button" id="abrirImportar">Importar itens</button>
+        </div>
+    </div>
+
     <section class="checklist-indicadores" aria-label="Indicadores de aderência">
         <div class="indicador indicador-destaque"><span>Aderência</span><strong id="ind-aderencia"><?= $aderencia ?></strong></div>
         <div class="indicador"><span>Total de itens (NT)</span><strong id="ind-nt"><?= $indicadores['nt'] ?></strong></div>
@@ -62,6 +71,33 @@ $aderencia = $indicadores['aderencia'] === null ? '—' : number_format($indicad
         <button type="submit">Adicionar item</button>
     </form>
 
+    <dialog id="dialogImportar" class="dialog-nc" aria-labelledby="tituloImportar">
+        <form id="formImportar" method="dialog">
+            <h3 id="tituloImportar">Importar itens</h3>
+            <p class="dica">Os itens entram no fim do checklist como "Não avaliado", com os próximos números.</p>
+
+            <label class="opcao-importar"><input type="radio" name="origem" value="texto" checked> Colar uma lista (um item por linha)</label>
+            <textarea name="texto" rows="8" placeholder="O título do documento foi preenchido?&#10;O item 1 (Introdução) foi preenchido?&#10;..." aria-label="Lista de itens, um por linha"></textarea>
+            <p class="dica">Dica: dá para copiar a coluna "Descrição" de uma planilha. Números no início da linha ("1.", "2 -") são ignorados.</p>
+
+            <label class="opcao-importar"><input type="radio" name="origem" value="projeto"<?= $projetosParaCopiar ? '' : ' disabled' ?>> Copiar os itens do checklist de outro projeto</label>
+            <select name="projeto_origem_id" aria-label="Projeto de origem"<?= $projetosParaCopiar ? '' : ' disabled' ?>>
+                <?php if (!$projetosParaCopiar): ?>
+                    <option value="">Nenhum outro projeto seu tem itens no checklist</option>
+                <?php endif; ?>
+                <?php foreach ($projetosParaCopiar as $origem): ?>
+                    <option value="<?= (int) $origem['id'] ?>"><?= e($origem['nome']) ?> (<?= (int) $origem['itens'] ?> itens)</option>
+                <?php endforeach; ?>
+            </select>
+
+            <p class="mensagem" id="mensagemImportar" role="status"></p>
+            <div class="dialog-nc-acoes">
+                <button type="button" id="cancelarImportar">Cancelar</button>
+                <button type="submit" id="confirmarImportar">Importar</button>
+            </div>
+        </form>
+    </dialog>
+
     <dialog id="dialogEnviarNc" class="dialog-nc" aria-labelledby="tituloEnviarNc">
         <form id="formEnviarNc" method="dialog">
             <h3 id="tituloEnviarNc">Solicitação de Resolução de Não Conformidade</h3>
@@ -94,6 +130,7 @@ $aderencia = $indicadores['aderencia'] === null ? '—' : number_format($indicad
             <p class="mensagem" id="mensagemEnviarNc" role="status"></p>
             <div class="dialog-nc-acoes">
                 <button type="button" id="cancelarEnviarNc">Cancelar</button>
+                <button type="button" id="previsualizarNc">Pré-visualizar PDF</button>
                 <button type="submit" id="confirmarEnviarNc">Enviar e-mail</button>
             </div>
         </form>

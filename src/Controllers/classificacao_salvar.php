@@ -35,7 +35,7 @@ if ($id !== null) {
 }
 
 try {
-    $resultado = classificacao_salvar($conexao, $projetoId, $atual, $dados);
+    $resultado = classificacao_salvar($conexao, $projetoId, $atual, $dados, $usuarioId);
 } catch (mysqli_sql_exception $e) {
     $conexao->close();
     if ($e->getCode() == 1062) {
@@ -46,10 +46,11 @@ try {
 }
 
 $lista = classificacoes_com_uso($conexao, $projetoId);
+$historico = classificacoes_historico($conexao, $projetoId);
 $conexao->close();
 
 $mensagem = $atual === null ? "Classificação \"{$dados['nome']}\" criada." : "Classificação \"{$dados['nome']}\" salva.";
 if ($resultado['recalculados'] > 0) {
     $mensagem .= " Data prevista recalculada em {$resultado['recalculados']} item(ns) do checklist com NC ainda não enviada.";
 }
-responder_json(['status' => 'ok', 'mensagem' => $mensagem, 'classificacoes' => $lista], $atual === null ? 201 : 200);
+responder_json(['status' => 'ok', 'mensagem' => $mensagem, 'classificacoes' => $lista, 'historico' => $historico], $atual === null ? 201 : 200);

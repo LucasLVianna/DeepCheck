@@ -1,13 +1,14 @@
 <?php
-// Rate limiting simples baseado em arquivos no diretório temporário do servidor
-// (fica fora do projeto e não depende de tabela no banco). Guarda os timestamps
-// das falhas recentes de cada chave dentro de uma janela deslizante.
+// Rate limiting simples baseado em arquivos (não depende de tabela no banco). Guarda os
+// timestamps das falhas recentes de cada chave dentro de uma janela deslizante.
+// Pasta: RATE_LIMIT_DIR (no Docker, um volume persistente — ver docker-compose.yml);
+// sem ela, o diretório temporário do sistema.
 
 const RATE_LIMIT_JANELA = 900; // 15 minutos
 
 function rate_limit_arquivo(string $chave): ?string
 {
-    $diretorio = sys_get_temp_dir() . '/deepcheck_rate_limit';
+    $diretorio = getenv('RATE_LIMIT_DIR') ?: sys_get_temp_dir() . '/deepcheck_rate_limit';
     if (!is_dir($diretorio) && !@mkdir($diretorio, 0700, true) && !is_dir($diretorio)) {
         return null;
     }

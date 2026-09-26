@@ -23,6 +23,19 @@ if ($item === null) {
     responder_json(['status' => 'nok', 'mensagem' => 'Item não encontrado.'], 404);
 }
 
+// Edição simultânea: se a linha na tela está desatualizada (outra pessoa alterou o item),
+// não grava e devolve o item atual. Sem "versao" (ex.: status pela aba NC), não verifica.
+$versaoVista = is_string($_POST['versao'] ?? null) ? $_POST['versao'] : null;
+if ($versaoVista !== null && $versaoVista !== $item['atualizado_em']) {
+    $conexao->close();
+    responder_json([
+        'status'   => 'nok',
+        'conflito' => true,
+        'mensagem' => 'Este item foi alterado por outra pessoa enquanto você editava. A linha foi atualizada com os dados atuais; refaça sua alteração se ainda for necessária.',
+        'item'     => checklist_item_para_json($item),
+    ], 409);
+}
+
 $classificacoes = array_column(classificacoes_do_projeto($conexao, (int) $item['projeto_id']), null, 'id');
 $resultado = checklist_aplicar_alteracao($item, $campo, $valor, $classificacoes, date('Y-m-d H:i:s'));
 if (isset($resultado['erro'])) {
@@ -39,11 +52,13 @@ try {
 }
 
 $indicadores = checklist_indicadores(checklist_itens($conexao, (int) $item['checklist_id']));
+// Relido para devolver a nova versão (atualizado_em).
+$itemSalvo = checklist_item_do_membro($conexao, $itemId, (int) $_SESSION['usuario']['id']);
 $conexao->close();
 
 responder_json([
     'status'      => 'ok',
     'mensagem'    => 'Alteração salva.',
-    'item'        => checklist_item_para_json($resultado['item']),
+    'item'        => checklist_item_para_json($itemSalvo),
     'indicadores' => $indicadores
 ]);

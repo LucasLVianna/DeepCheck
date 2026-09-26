@@ -16,6 +16,8 @@
     }
 
     projeto_registrar_acesso($conexao, $projetoId, $usuarioId);
+    $membros = projeto_membros($conexao, $projetoId);
+    $ehDono = (int) $projeto['criado_por'] === $usuarioId;
 
     $abas = [
         'pgq'       => ['titulo' => 'Plano de Garantia da Qualidade', 'fase' => 4],
@@ -34,11 +36,13 @@
         require_once __DIR__ . '/../Models/classificacoes_nc.php';
         $pgq = pgq_do_projeto($conexao, $projetoId);
         $classificacoes = classificacoes_com_uso($conexao, $projetoId);
+        $historicoClassificacoes = classificacoes_historico($conexao, $projetoId);
         $arquivosAba = ['css' => '/public/css/pgq.css', 'js' => '/public/js/pgq.js'];
     } elseif ($abaAtual === 'checklist') {
         require_once __DIR__ . '/../Models/checklist.php';
         require_once __DIR__ . '/../Models/classificacoes_nc.php';
         $checklist = checklist_do_projeto($conexao, $projetoId);
+        $projetosParaCopiar = checklist_projetos_para_copiar($conexao, $usuarioId, $projetoId);
         $itens = $checklist ? checklist_itens($conexao, $checklist['id']) : [];
         $classificacoes = classificacoes_do_projeto($conexao, $projetoId);
         $indicadores = checklist_indicadores($itens);
@@ -72,8 +76,18 @@
     <main class="projeto">
         <header class="projeto-cabecalho">
             <a href="/src/Views/menu.php">&larr; Meus projetos</a>
-            <h1><?= e($projeto['nome']) ?></h1>
-            <p>Código de acesso: <code><?= e($projeto['projeto_codigo_acesso']) ?></code></p>
+            <div class="projeto-titulo">
+                <div>
+                    <h1><?= e($projeto['nome']) ?></h1>
+                    <p>Código de acesso: <code><?= e($projeto['projeto_codigo_acesso']) ?></code></p>
+                </div>
+                <div class="projeto-acoes">
+                    <?php if (in_array($abaAtual, ['pgq', 'checklist'], true)): ?>
+                        <a class="botao-link" id="exportarPdf" download href="/src/Controllers/projeto_exportar.php?id=<?= (int) $projeto['id'] ?>&amp;documento=<?= $abaAtual ?>">Exportar PDF</a>
+                    <?php endif; ?>
+                    <button type="button" id="abrirMembros">Membros (<?= count($membros) ?>)</button>
+                </div>
+            </div>
         </header>
 
         <nav class="abas" aria-label="Seções do projeto">
@@ -98,8 +112,11 @@
         </section>
     </main>
 
+    <?php include __DIR__ . '/projeto_membros.php'; ?>
+
+    <script src="<?= asset('/public/js/api.js') ?>"></script>
+    <script src="<?= asset('/public/js/membros.js') ?>"></script>
     <?php if ($arquivosAba['js']): ?>
-        <script src="<?= asset('/public/js/api.js') ?>"></script>
         <script src="<?= asset($arquivosAba['js']) ?>"></script>
     <?php endif; ?>
 </body>

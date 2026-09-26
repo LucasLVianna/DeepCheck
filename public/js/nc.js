@@ -95,6 +95,7 @@ abaNc.addEventListener('click', (event) => {
     formEscalonar.nc_id.value = card.dataset.ncId;
     formEscalonar.numero_escalonamento.value = card.dataset.numeroEscalonamento;
     formEscalonar.responsavel_resolucao.value = card.dataset.responsavel;
+    formEscalonar.responsavel_email.value = card.dataset.responsavelEmail;
     document.getElementById('escItem').textContent = card.dataset.numeroItem;
     document.getElementById('escClassificacao').textContent = card.dataset.classificacao;
     document.getElementById('escPrazoAtual').textContent = card.dataset.prazoAtual;
@@ -117,6 +118,15 @@ abaNc.addEventListener('click', (event) => {
 });
 
 document.getElementById('cancelarEscalonar').addEventListener('click', () => dialogEscalonar.close());
+
+document.getElementById('previsualizarEscalonamento').addEventListener('click', async () => {
+    if (!formEscalonar.reportValidity()) return;
+    const dados = new FormData(formEscalonar);
+    dados.append('tipo', 'escalonamento');
+    const erro = await abrirPdfPost('/src/Controllers/nc_previsualizar.php', dados);
+    mensagemEscalonar.classList.toggle('mensagem-erro', erro !== null);
+    mensagemEscalonar.textContent = erro || '';
+});
 
 formEscalonar.addEventListener('submit', async (event) => {
     event.preventDefault();

@@ -6,6 +6,8 @@ responde um JSON no stdout:
   entrada: {"smtp": {...}, "email": {...}, "documento": {...}, "anexo_nome": "...",
             "anexos_extras": [{"nome": "...", "base64": "..."}], "apenas_pdf": false}
   (anexos_extras: PDFs já existentes enviados junto, ex.: o do 1º envio num escalonamento)
+  Sem "documento" (ex.: e-mail de redefinição de senha): envia só o texto, sem PDF, e
+  responde {"ok": true, "pdf_base64": null}.
   saída:   {"ok": true, "pdf_base64": "..."}
            {"ok": false, "etapa": "entrada|pdf|smtp", "erro": "mensagem para o usuário",
             "detalhe": "mensagem técnica (vai só para o log)"}
@@ -128,12 +130,14 @@ def montar_mensagem(email, pdf, anexo_nome, anexos_extras=()):
     msg["To"] = formataddr((email["para_nome"], email["para"]))
     if email.get("cc"):
         msg["Cc"] = ", ".join(email["cc"])
-    msg["Reply-To"] = email["responder_para"]
+    if email.get("responder_para"):
+        msg["Reply-To"] = email["responder_para"]
     msg["Subject"] = email["assunto"]
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = make_msgid(domain=email["de_email"].split("@")[-1])
     msg.set_content(email["corpo"])
-    msg.add_attachment(pdf, maintype="application", subtype="pdf", filename=anexo_nome)
+    if pdf is not None:
+        msg.add_attachment(pdf, maintype="application", subtype="pdf", filename=anexo_nome)
     for extra in anexos_extras:
         msg.add_attachment(base64.b64decode(extra["base64"]), maintype="application", subtype="pdf",
                            filename=extra["nome"])
@@ -166,15 +170,17 @@ def falha(etapa, erro, detalhe):
 def main():
     try:
         entrada = json.load(sys.stdin)
-        documento = entrada["documento"]
-        anexo_nome = entrada["anexo_nome"]
-    except (ValueError, KeyError, TypeError) as e:
+        documento = entrada.get("documento")
+        anexo_nome = entrada["anexo_nome"] if documento is not None else None
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         falha("entrada", "Dados inválidos para gerar o documento.", e)
 
-    try:
-        pdf = gerar_pdf(documento)
-    except Exception as e:  # noqa: BLE001 — qualquer falha do reportlab vira resposta de erro
-        falha("pdf", "Não foi possível gerar o PDF da solicitação.", e)
+    pdf = None
+    if documento is not None:
+        try:
+            pdf = gerar_pdf(documento)
+        except Exception as e:  # noqa: BLE001 — qualquer falha do reportlab vira resposta de erro
+            falha("pdf", "Não foi possível gerar o PDF da solicitação.", e)
 
     if not entrada.get("apenas_pdf"):
         try:
@@ -188,7 +194,7 @@ def main():
         except (KeyError, TypeError, ValueError, base64.binascii.Error) as e:
             falha("entrada", "Dados inválidos para montar o e-mail.", e)
 
-    responder({"ok": True, "pdf_base64": base64.b64encode(pdf).decode("ascii")}, 0)
+    responder({"ok": True, "pdf_base64": base64.b64encode(pdf).decode("ascii") if pdf is not None else None}, 0)
 
 
 if __name__ == "__main__":

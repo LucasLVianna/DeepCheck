@@ -55,12 +55,19 @@ function projeto_validar_senha(string $senha): ?string
     return null;
 }
 
-// Projetos em que o usuário é membro, do acesso mais recente para o mais antigo.
+// Projetos em que o usuário é membro, do acesso mais recente para o mais antigo, com a
+// quantidade de NCs abertas (itens do checklist em não conformidade com status pendente,
+// não resolvida ou escalonada) e quantas delas estão com o prazo vencido.
 function projetos_do_usuario(mysqli $conexao, int $usuarioId): array
 {
+    $ncsAbertas = "FROM checklist_itens i JOIN checklists c ON c.id = i.checklist_id
+                   WHERE c.projeto_id = p.id AND i.resultado = 'nao_conformidade'
+                     AND i.status_nc IN ('pendente', 'nao_resolvida', 'escalonada')";
     $stmt = $conexao->prepare(
         "SELECT p.id, p.nome, p.projeto_codigo_acesso, p.criado_por,
-                u.nome_usuario AS criador_nome, m.acesso_em
+                u.nome_usuario AS criador_nome, m.acesso_em,
+                (SELECT COUNT(*) {$ncsAbertas}) AS ncs_abertas,
+                (SELECT COUNT(*) {$ncsAbertas} AND i.data_prevista_resolucao < NOW()) AS ncs_vencidas
            FROM projeto_membros m
            JOIN projetos p ON p.id = m.projeto_id
            JOIN usuario u ON u.id = p.criado_por
@@ -191,4 +198,50 @@ function projeto_excluir(mysqli $conexao, int $projetoId): void
         $conexao->rollback();
         throw $e;
     }
+}
+
+// Membros do projeto (nome, e-mail, último acesso), com o dono (criado_por) primeiro.
+function projeto_membros(mysqli $conexao, int $projetoId): array
+{
+    $stmt = $conexao->prepare(
+        "SELECT u.id, u.nome_usuario, u.email_usuario, m.acesso_em, (u.id = p.criado_por) AS dono
+           FROM projeto_membros m
+           JOIN usuario u ON u.id = m.usuario_id
+           JOIN projetos p ON p.id = m.projeto_id
+          WHERE m.projeto_id = ?
+          ORDER BY dono DESC, u.nome_usuario"
+    );
+    $stmt->bind_param("i", $projetoId);
+    $stmt->execute();
+    $membros = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $membros;
+}
+
+// Remove o vínculo do usuário (sair do projeto ou ser removido pelo dono).
+// O acesso volta a exigir código + senha do projeto.
+function projeto_remover_membro(mysqli $conexao, int $projetoId, int $usuarioId): void
+{
+    $stmt = $conexao->prepare("DELETE FROM projeto_membros WHERE projeto_id = ? AND usuario_id = ?");
+    $stmt->bind_param("ii", $projetoId, $usuarioId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function projeto_trocar_senha(mysqli $conexao, int $projetoId, string $senha): void
+{
+    $hash = password_hash($senha, PASSWORD_DEFAULT);
+    $stmt = $conexao->prepare("UPDATE projetos SET projeto_senha_hash = ? WHERE id = ?");
+    $stmt->bind_param("si", $hash, $projetoId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Passa a posse (criado_por) para outro membro; o dono anterior continua membro.
+function projeto_transferir_posse(mysqli $conexao, int $projetoId, int $novoDonoId): void
+{
+    $stmt = $conexao->prepare("UPDATE projetos SET criado_por = ? WHERE id = ?");
+    $stmt->bind_param("ii", $novoDonoId, $projetoId);
+    $stmt->execute();
+    $stmt->close();
 }

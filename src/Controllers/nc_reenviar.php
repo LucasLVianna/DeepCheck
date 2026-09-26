@@ -39,13 +39,12 @@ if (!in_array($nc['status'], NC_STATUS_ABERTOS, true)) {
     responder_json(['status' => 'nok', 'mensagem' => 'Só é possível reenviar uma NC aberta (pendente, não resolvida ou escalonada).'], 409);
 }
 
-// Reenvio: documento atual (com o histórico, se houver) ao responsável pela resolução,
-// com cópia para o usuário e para as cópias do 1º envio.
+// Reenvio: documento atual (com o histórico, se houver) ao responsável pela resolução
+// atual (o do último escalonamento), com cópia para o usuário e para as cópias do 1º envio.
 $usuario = nc_usuario_remetente($conexao, $usuarioId);
 $primeiroEnvio = nc_primeiro_email($conexao, $ncId);
 $historico = nc_historico($conexao, $ncId);
-$ultimoResponsavel = $historico ? end($historico)['responsavel_resolucao'] : $nc['responsavel_resolucao'];
-$nc['responsavel_resolucao'] = $ultimoResponsavel;
+$ultimoResponsavel = $nc['responsavel_resolucao'];
 
 $texto = nc_texto_reenvio($nc['projeto_nome'], $ultimoResponsavel, $nc['responsavel_qa']);
 $cc = nc_lista_cc(

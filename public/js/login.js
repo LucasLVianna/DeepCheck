@@ -1,59 +1,47 @@
-document.getElementById('formLogin').addEventListener('submit',(e)=>{
-    e.preventDefault();
-    login();
-})
+const formLogin = document.getElementById('formLogin');
+const campoEmail = document.getElementById('email');
+const campoSenha = document.getElementById('senha');
 
-document.getElementById('createAccount').addEventListener('click', ()=>{
-    window.location.href = '/src/Views/cadastro.php';
-})
-document.addEventListener('DOMContentLoaded', async ()=>{
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('motivo') === 'expirado') {
-        document.getElementById('error').style.color = '#ffcc00';
-        document.getElementById('error').textContent = 'Sua sessão expirou por inatividade. Faça login novamente.';
-    }
-});
-
-
-async function login() {
-    let email = document.getElementById('email').value;
-    let senha = document.getElementById('senha').value;
-
-    if(!email){
-        document.getElementById('error-email').textContent = 'Email precisa receber valores';
-        return;
-    }else if(!email.includes('@') && !email.includes('.')) {
-        document.getElementById('error-email').textContent = 'Digite um email válido, no formato @xxx.xxx';
-        return;
-    }
-
-    if(!senha){
-        document.getElementById('error-senha').textContent = 'Senha precisa receber valores';
-        return;
-    }else if(senha.length < 8) {
-        document.getElementById('error-senha').textContent = 'ERRO! Senha muito curta';
-        return;
-    }
-
-    const fd = new FormData();
-    fd.append('email', email);
-    fd.append('senha', senha);
-
-    const retorno = await fetch('/src/Controllers/login_backend.php',{
-        method: "POST",
-        headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
-        body: fd
-    })
-
-    const resposta = await retorno.json();
-    if(resposta.status == 'ok'){
-        document.getElementById('error').style.color = '#00ffa3';
-        document.getElementById('error').textContent = 'SUCESSO! ' + resposta.mensagem + '. Redirecionando...';
-        setTimeout(() => {
-            window.location.href = resposta.redirect;
-        }, 1000);
-    }else{
-        document.getElementById('error').style.color = '#ff6b6b';
-        document.getElementById('error').textContent = 'ERRO! ' + resposta.mensagem;
-    };
+const avisos = {
+    expirado: ['Sua sessão expirou por inatividade. Entre novamente.', 'aviso'],
+    cadastro: ['Conta criada com sucesso! Entre com seu e-mail e senha.', 'sucesso'],
+    senha_redefinida: ['Senha redefinida com sucesso! Entre com a nova senha.', 'sucesso']
+};
+const motivo = new URLSearchParams(window.location.search).get('motivo');
+if (avisos[motivo]) {
+    mostrarAlerta(...avisos[motivo]);
 }
+
+formLogin.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    esconderAlerta();
+
+    const email = campoEmail.value.trim();
+    let valido = true;
+    if (!emailValido(email)) {
+        mostrarErroCampo(campoEmail, email ? 'Digite um e-mail válido.' : 'Informe seu e-mail.');
+        valido = false;
+    }
+    if (!campoSenha.value) {
+        mostrarErroCampo(campoSenha, 'Informe sua senha.');
+        valido = false;
+    }
+    if (!valido) {
+        formLogin.querySelector('[aria-invalid="true"]').focus();
+        return;
+    }
+
+    const botao = document.getElementById('botaoEntrar');
+    botaoCarregando(botao, true, 'Entrando...');
+    const resposta = await enviarPost('/src/Controllers/login_backend.php', { email, senha: campoSenha.value });
+
+    if (resposta.status === 'ok') {
+        botao.textContent = 'Redirecionando...';
+        window.location.href = resposta.redirect;
+        return;
+    }
+    botaoCarregando(botao, false);
+    mostrarAlerta(resposta.mensagem, 'erro');
+    campoSenha.value = '';
+    campoSenha.focus();
+});

@@ -9,6 +9,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-reportlab \
     && rm -rf /var/lib/apt/lists/*
 
+# Pasta do rate limit (volume deepcheck_rate_limit no docker-compose), gravável pelo Apache.
+RUN mkdir -p /var/lib/deepcheck/rate_limit && chown -R www-data:www-data /var/lib/deepcheck
+
 COPY docker/php/deepcheck.ini /usr/local/etc/php/conf.d/deepcheck.ini
 COPY docker/apache/zz-deepcheck.conf /etc/apache2/conf-available/zz-deepcheck.conf
 RUN a2enconf zz-deepcheck

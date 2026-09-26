@@ -9,6 +9,10 @@ services:
       - "${APP_PORT:-8080}:80"
     volumes:
       - ./:/var/www/html:z
+      # Rate limit (login, acesso a projetos, envios) persiste quando o container é recriado.
+      - deepcheck_rate_limit:/var/lib/deepcheck/rate_limit
+    environment:
+      RATE_LIMIT_DIR: /var/lib/deepcheck/rate_limit
     depends_on:
       db:
         condition: service_healthy
@@ -26,7 +30,8 @@ services:
     volumes:
       - deepcheck_db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      # Testa login e consulta de verdade: "mysqladmin ping" dava "healthy" até com a senha errada.
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -50,3 +55,4 @@ networks:
 
 volumes:
   deepcheck_db_data:
+  deepcheck_rate_limit:

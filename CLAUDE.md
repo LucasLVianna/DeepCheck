@@ -14,7 +14,7 @@ Este documento é o contexto persistente do projeto. Leia-o antes de qualquer al
 
 ## ▶️ Ponto de retomada (atualizado em 2026-09-25)
 
-**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Fase 7 concluída e validada no navegador** (com escalonamento real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 7: aba Não Conformidades e escalonamento"). **🎉 Plano de 8 fases CONCLUÍDO** (2026-09-26): todas as fases implementadas, testadas via HTTP e validadas pelo desenvolvedor no navegador (Fases 6 e 7 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 8: classificações e prazos de NC"). **Próximos passos possíveis**: itens de "Pendências em aberto" que o desenvolvedor escolher (seguir a mesma forma de trabalho: decisões antes de codar, SQL proposto quando precisar de schema, testes via HTTP com dados descartáveis, registro aqui). Plano original da etapa de análise (já cumprido): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
+**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Fase 7 concluída e validada no navegador** (com escalonamento real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 7: aba Não Conformidades e escalonamento"). **🎉 Plano de 8 fases CONCLUÍDO** (2026-09-26): todas as fases implementadas, testadas via HTTP e validadas pelo desenvolvedor no navegador (Fases 6 e 7 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 8: classificações e prazos de NC"). **Fase 9 concluída e testada via HTTP** (ver "Fase 9 — andamento"): todas as pendências tratadas, UI nova do login/cadastro e PDFs do PGQ e do checklist; **aguardando validação do desenvolvedor no navegador e o commit**. **Próximos passos possíveis (texto original)**: itens de "Pendências em aberto" que o desenvolvedor escolher (seguir a mesma forma de trabalho: decisões antes de codar, SQL proposto quando precisar de schema, testes via HTTP com dados descartáveis, registro aqui). Plano original da etapa de análise (já cumprido): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
 
 **Ao retomar, fazer nesta ordem:**
 1. ~~Validar a Fase 5 no navegador~~ ✅ validada em 2026-09-26. ~~`DROP INDEX uk_checklists_projeto_nome`~~ ✅ aplicado.
@@ -88,7 +88,7 @@ Também foi feito: `password_needs_rehash` no login (atualiza o hash se o padrã
 - App em `http://localhost:8080`; MySQL exposto no host em `127.0.0.1:3307` (Workbench: usar `127.0.0.1`, não `localhost`). Dentro do Docker o PHP usa `DB_HOST=db`, porta 3306.
 - `DB_ROOT_PASSWORD` só vale na **primeira** inicialização do volume `deepcheck_deepcheck_db_data`. Para trocar senha depois: `ALTER USER` no Workbench + atualizar o `.env` (ou `docker compose down -v`, que apaga todos os dados).
 - Banco criado no Workbench: **`deepcheck`** (minúsculo — no Linux o nome do banco é case-sensitive; `DB_NAME` no `.env` deve ser exatamente `deepcheck`). Usuário da aplicação: `deepcheck_app`@`%` com `SELECT, INSERT, UPDATE, DELETE ON deepcheck.*`.
-- Rate limit fica em `/tmp/deepcheck_rate_limit` do container (zera ao recriar o container). Para liberar manualmente: `docker exec -u root deepcheck_app rm -rf /tmp/deepcheck_rate_limit`.
+- Rate limit: desde a Fase 9 fica no volume `deepcheck_rate_limit` (`/var/lib/deepcheck/rate_limit`, variável `RATE_LIMIT_DIR`) e **não** zera ao recriar o container. Para liberar manualmente: `docker exec deepcheck_app find /var/lib/deepcheck/rate_limit -type f -name '*.json' -delete`.
 
 #### Testes realizados (HTTP direto contra o container, com o banco real)
 
@@ -501,82 +501,141 @@ Todos passaram, sem erros/warnings no log. Cenário com 3 itens NC: Média não 
 - Mudanças de classificação não geram histórico/auditoria (quem mudou e quando).
 - O número de itens "recalculados" na exclusão com substituição inclui itens que já usavam a substituta (recalculados com o mesmo resultado).
 
-### Estrutura real de arquivos (após a Fase 8)
+### Fase 9 — Pendências + UI do login/cadastro + exportar PGQ e checklist em PDF (planejamento, 2026-09-26)
+
+Pedido do desenvolvedor: resolver **todas** as "Pendências em aberto", **refazer a UI só das páginas de login e criação de conta** (as telas novas de redefinição de senha seguem o mesmo visual) e **exportar o checklist e o PGQ em PDF com formatação caprichada**.
+
+**SQL proposto e validado num MySQL descartável (inclusive com "Safe Updates" ligado, como no Workbench)** — aguardando o desenvolvedor aplicar: `senha_redefinicoes` (token de redefinição: só o hash SHA-256, expiração, uso único; FK usuario CASCADE), `checklists.ultimo_numero_item` (contador — numeração nunca reaproveitada; preenchido com o maior número existente), `pgq.logo` (MEDIUMBLOB) + `pgq.logo_tipo`, `classificacoes_nc_historico` (projeto CASCADE, usuário RESTRICT, ação `criada/alterada/excluida`, descrição).
+
+**Decisões**: o desenvolvedor aceitou todas as recomendações (2026-09-26) — inclusive feriados **só nacionais oficiais** (sem Carnaval/Corpus Christi) e o **recálculo único** das datas previstas dos itens com NC ainda não enviada.
+
+**Situação do SQL no banco (conferido em 2026-09-26)**: `classificacoes_nc_historico` e, na 2ª tentativa, `pgq.logo`/`pgq.logo_tipo` foram criados. **Ainda faltam** `senha_redefinicoes` e `checklists.ultimo_numero_item` (provavelmente o Workbench executou só o comando sob o cursor — para rodar o script inteiro: Ctrl+Shift+Enter). As partes que dependem delas ("esqueci a senha", logo na capa e contador do checklist) ficaram para depois; o resto foi implementado.
+
+**Plano em blocos**: A) UI login/cadastro + "esqueci a senha" por e-mail; B) página de perfil; C) membros do projeto (sair, remover, trocar senha do projeto, transferir posse); D) PDFs do PGQ (com logo) e do checklist; E) checklist (renomear, importar itens, contador, aviso de edição simultânea); F) NCs (pré-visualizar PDF, feriados nacionais no prazo, recálculo de prazos antigos, responsável/e-mail no escalonamento, aviso de prazo vencido no dashboard); G) infraestrutura (`index.html` → `index.php` com headers, healthcheck real do MySQL, rate limit em volume persistente, checagem de "pelo menos 1 classificação" dentro da transação, aviso de edição simultânea no PGQ).
+
+### Fase 9 — andamento (2026-09-26): implementado e testado via HTTP, exceto o que depende do SQL que falta
+
+#### O que foi implementado
+
+- **A) Login e cadastro — visual novo** (só essas páginas): `public/css/autenticacao.css` (identidade da página inicial: azul `#4f7dfa`, cartão central, painel da marca à esquerda que vira faixa compacta no celular) + `src/Views/autenticacao_marca.php` (painel reutilizado) + `public/js/autenticacao.js` (mostrar/ocultar senha, requisitos da senha marcados ao vivo — mesma regra do backend —, erros por campo com `aria-invalid`, alerta geral, botão com estado "carregando"). `login.php`/`cadastro.php` reescritos; cadastro ganhou "Confirmar senha" e máscara de CEP; após criar a conta vai para o login com aviso de sucesso (`?motivo=cadastro`); o login também mostra `?motivo=expirado` e `?motivo=senha_redefinida`. `public/css/login.css` e `cadastro.css` removidos. Conferido com capturas do Firefox headless (desktop e celular).
+- **B) Perfil** (`src/Views/perfil.php`, `src/Controllers/perfil_salvar.php`, `public/js/perfil.js`, `public/css/perfil.css`; link "Perfil" de volta na navbar): alterar nome e CEP; alterar e-mail e senha **pedindo a senha atual** (rate limit de 5 erros/15 min por usuário → 429); trocar a senha regenera o ID da sessão. Regras de nome/e-mail/CEP/senha centralizadas em `src/Models/usuarios.php` e usadas também pelo cadastro.
+- **C) Membros** (`src/Controllers/projeto_membros.php`, painel `src/Views/projeto_membros.php` aberto pelo botão "Membros (N)" no cabeçalho do projeto, `public/js/membros.js`): lista com e-mail, último acesso e papel (Dono/Membro); **dono** remove membros, **troca a senha do projeto** (quem já é membro continua) e **transfere a posse** para outro membro (continua como membro); **membro** sai do projeto (o dono só sai depois de transferir). "Criado por" virou **"Dono"** no dashboard e nas mensagens.
+- **D) Exportar PDF** (botão "Exportar PDF" no cabeçalho, abas PGQ e Checklist; `src/Controllers/projeto_exportar.php` GET + `src/Models/exportacao.php` + `scripts/documentos_pdf.py`): **PGQ** com capa no formato do template (logo — quando existir —, título, projeto, autor, versão, cidade e mês/ano), comprometimento com coluna de assinatura em branco, índice, seções 1–7 com tabelas estilizadas, cabeçalho e "Página N de M"; **Checklist** em A4 paisagem com painel de aderência, tabela das 11 colunas com cores por resultado/status, prazo vencido em vermelho e legenda da fórmula. Aviso no PGQ se houver alterações não salvas (o PDF usa a versão salva). Novo `config/python.php` (`python_executar()`/`python_gerar_pdf()`), usado também por `config/email.php`.
+- **E) Checklist**: **renomear** (`checklist_renomear.php`), **importar itens** (`checklist_importar.php`: colar lista — um por linha, numeração "1.", "2 -", "3)" removida — ou copiar do checklist de outro projeto do qual o usuário é membro); `checklist_inserir_itens()` compartilhado por adicionar/importar (trava o checklist, respeita o limite de 500).
+- **F) NCs e prazos**: **feriados nacionais** no cálculo (`checklist_feriados()`, Páscoa por Meeus/Jones/Butcher — a extensão calendar não existe no container — para a Sexta-feira Santa; fixos: 01/01, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 20/11, 25/12); **recálculo único** feito em 2026-09-26 nos itens não enviados do desenvolvedor (1 item, data não mudou — não havia feriado no intervalo); **escalonamento** pede o **e-mail do responsável** e atualiza responsável/e-mail da NC e o responsável do item (reenvio passa a usar o atual; CC inclui o novo e o anterior); **pré-visualizar PDF** antes de enviar e de escalonar (`nc_previsualizar.php`, `abrirPdfPost()` em `api.js`, sem gravar nada); **dashboard** mostra "N NC(s) aberta(s)" e "N com prazo vencido" por projeto.
+- **G) Outros**: **aviso de edição simultânea** no PGQ (campo `versao` = `atualizado_em`; conflito → 409 e o usuário escolhe sobrescrever) e no checklist por item (`data-versao`; conflito → 409 com o item atual, a linha é atualizada; sem `versao`, como na aba NC, não verifica); **histórico das classificações** (`classificacoes_nc_historico`, exibido na seção 6); checagem de "pelo menos 1 classificação" **dentro da transação** (`SELECT ... FOR UPDATE`); **infra**: `index.html` → `index.php` com os headers de segurança, healthcheck do MySQL com login real, **rate limit num volume persistente** (`deepcheck_rate_limit` em `/var/lib/deepcheck/rate_limit`, `RATE_LIMIT_DIR`) — para liberar manualmente: `docker exec deepcheck_app find /var/lib/deepcheck/rate_limit -type f -name '*.json' -delete`.
+
+#### Testes realizados (HTTP + PHP CLI + capturas; dados de teste apagados)
+
+Todos passaram, sem erros no log: capturas do login/cadastro (desktop/celular); cadastro refatorado (senha fraca, CEP, nome longo, e-mail repetido, campos em array); perfil (dados + nome na navbar, e-mail com senha errada 403 / repetido 409 / ok, senha fraca / confirmação / ok, sessão continua, login com e-mail e senha novos, senha antiga recusada, rate limit na 6ª tentativa); membros (permissões 403, dono não sai 409, remover → sem acesso, trocar senha → antiga recusada e nova aceita, sair, transferir para não membro 404, transferir → novo dono e o antigo perde renomear, "Dono" no dashboard); exportação (não membro 404, sem login → login, documento inválido 404, membro 200; PDFs conferidos visualmente e larguras de coluna ajustadas); checklist (renomear, importar lista com numeração removida, erros de lista vazia/linha longa, copiar de outro projeto — só de projetos em que é membro); edição simultânea (item e PGQ, inclusive sobrescrever e 1º salvamento concorrente); histórico das classificações (criada/alterada/excluída com substituição); feriados (13 casos, Páscoa em 6 anos); prévia (PDF correto, validações, nada gravado); dashboard (abertas e vencidas); escalonamento com e-mail do responsável e reenvio (via cópia com Mailpit).
+
+#### Logo do projeto — feito em 2026-09-26 (colunas `pgq.logo`/`logo_tipo` aplicadas pelo desenvolvedor)
+
+- Na capa do PGQ: prévia da imagem, campo de arquivo (sem `name`, não vai no "Salvar"), botões "Enviar logo"/"Remover logo" salvos na hora (`src/Controllers/pgq_logo.php`, POST multipart); exibição por `src/Controllers/pgq_logo_imagem.php?projeto=<id>` (só membros); logo centralizado na capa do PDF do PGQ.
+- `pgq_ler_logo()` valida **pelo conteúdo** (finfo + getimagesize): só PNG/JPG, até 1 MB e 4000×4000 px. `pgq_salvar_logo()` faz upsert **sem mudar `atualizado_em`** de um PGQ existente (não gera falso conflito de edição simultânea); se o PGQ ainda não existia, é criado e a tela passa a usar a versão devolvida. `pgq_do_projeto()` não usa mais `SELECT *` (não carrega o BLOB; expõe `tem_logo`); o logo é lido só por `pgq_logo()`.
+- Testado via HTTP: sem arquivo, texto disfarçado de .png, >1 MB e >4000 px → 400; PNG e JPG aceitos; imagem idêntica à enviada; não membro 404 (ver e enviar); sem login → login; trocar o logo não muda `atualizado_em` e salvar o plano com a versão anterior não dá conflito; logo na capa do PDF (conferido visualmente); remover → NULL e imagem 404.
+
+#### "Esqueceu a senha?" e contador do checklist — feitos em 2026-09-26 (SQL aplicado pelo desenvolvedor; o preenchimento do contador foi feito pelo Claude Code — ver "Gestão do Banco de Dados")
+
+- **"Esqueceu a senha?"**: `src/Views/esqueci_senha.php` → `src/Controllers/esqueci_senha_enviar.php` (resposta **sempre a mesma**, exista a conta ou não; rate limit de 3 pedidos por e-mail e 10 por IP em 15 min) envia pela conta do sistema um e-mail só de texto com o link `APP_URL/src/Views/redefinir_senha.php?token=<64 hex>`; `redefinir_senha.php` confere o link ao abrir (`Referrer-Policy: no-referrer`) → `redefinir_senha_salvar.php` grava a nova senha (mesma regra do cadastro). Token aleatório de 256 bits; no banco só o **SHA-256**; **1 hora**, **uso único**; novo pedido, redefinição concluída ou troca de senha no perfil **invalidam** os links pendentes. Funções em `src/Models/usuarios.php` (`senha_redefinicao_*`, `usuario_por_email`); `config/email.php` ganhou `email_enviar_texto()` e `scripts/enviar_email.py` envia sem PDF quando não há `documento`. JS em `public/js/senha.js`. Login mostra "Senha redefinida" (`?motivo=senha_redefinida`).
+- **Numeração nunca reaproveitada**: `checklist_inserir_itens()` numera a partir de `checklists.ultimo_numero_item` (usa o maior entre o contador e o maior número existente, por segurança) e atualiza o contador na mesma transação.
+- Testado (cópia do app + Mailpit): página e link no login; e-mail inválido 400; e-mail inexistente → mesma mensagem, nenhum e-mail e nenhum pedido gravado; e-mail existente (em maiúsculas) → e-mail do "DeepCheck", sem Reply-To e sem anexo, com o link; banco guarda só o SHA-256, expira em 60 min; link abre o formulário; token inválido → "Link inválido"; senha fraca/confirmação diferente 400; redefinição ok → login com a senha nova; reusar o link 410; novo pedido invalida o anterior; 4º pedido em 15 min → 429; link expirado → inválido. Contador: excluir o último e adicionar não reaproveita; importar continua a sequência; 20 adições simultâneas sem número repetido; contador zerado à força não gera repetição. Capturas das telas novas conferidas.
+
+**Fase 9 concluída e testada via HTTP em 2026-09-26** — falta a validação do desenvolvedor no navegador e o commit.
+
+#### Limitações conhecidas (Fase 9)
+
+- "Esqueci a senha": quando o e-mail existe, a resposta demora um pouco mais (envio do e-mail na própria requisição) — em tese dá para inferir que a conta existe pelo tempo. Aceito para o MVP (o rate limit reduz o abuso).
+- Trocar/redefinir a senha não encerra outras sessões já abertas do usuário (sessões em arquivo, sem lista por usuário).
+- Feriados estaduais/municipais e pontos facultativos não entram no prazo.
+
+### Estrutura real de arquivos (após a Fase 9)
 
 ```
 config/                 bootstrap incluído por tudo (bloqueado na web)
-  auth.php              sessão, login, CSRF, e(), responder_json(), HASH_FICTICIO
-  email.php             ponte PHP → Python (proc_open) e configuração SMTP do .env
+  auth.php              sessão, login, CSRF, e(), asset(), responder_json(), HASH_FICTICIO
+  python.php            python_executar()/python_gerar_pdf(): scripts Python via proc_open (JSON no stdin/stdout)
+  email.php             configuração SMTP do .env, e-mail da NC (com PDF) e e-mail só de texto
   headers.php           headers de segurança
   conexao.php           mysqli ($conexao), utf8mb4, time_zone
   env.php               env('NOME')
   rate_limit.php        rate limit em arquivos no /tmp do container
 src/Models/             acesso a dados (bloqueado na web)
-  projetos.php          projetos + membros + classificações padrão
-  pgq.php               PGQ e sub-tabelas (seções 2, 3, 4)
-  checklist.php         checklist, itens, regras de NC, prazo em dias úteis e fórmula de aderência
+  usuarios.php          regras de conta (nome, e-mail, CEP, senha), perfil e redefinição de senha
+  projetos.php          projetos + membros (sair, remover, trocar senha, transferir posse) + classificações padrão
+  exportacao.php        dados formatados para os PDFs do PGQ e do checklist
+  pgq.php               PGQ e sub-tabelas (seções 2, 3, 4), logo e aviso de edição simultânea
+  checklist.php         checklist, itens, regras de NC, prazo em dias úteis (com feriados), aderência, importar/renomear, contador
   nao_conformidades.php NCs enviadas, escalonamentos, reenvio, textos dos e-mails e registro dos envios
-  classificacoes_nc.php classificações de NC: uso, criar/editar (recalcula prazos), excluir com substituição
-src/Controllers/        endpoints (JSON, exceto logoff)
-  login_backend.php, cadastrar_backend.php, logoff.php
-  projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php
-  pgq_salvar.php
+  classificacoes_nc.php classificações de NC: uso, criar/editar (recalcula prazos), excluir com substituição, histórico
+src/Controllers/        endpoints (JSON, exceto logoff, downloads e imagem do logo)
+  login_backend.php, cadastrar_backend.php, logoff.php, perfil_salvar.php
+  esqueci_senha_enviar.php, redefinir_senha_salvar.php
+  projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php, projeto_membros.php
+  projeto_exportar.php  PDF do PGQ ou do checklist (GET)
+  pgq_salvar.php, pgq_logo.php, pgq_logo_imagem.php
   classificacao_salvar.php, classificacao_excluir.php (seção 6 do PGQ)
   checklist_item_adicionar.php, checklist_item_atualizar.php, checklist_item_excluir.php
+  checklist_renomear.php, checklist_importar.php
   nc_enviar.php         gera o PDF e envia a Solicitação de Resolução de NC (1º envio)
-  nc_escalonar.php, nc_reenviar.php, nc_email_pdf.php (download do PDF enviado)
+  nc_escalonar.php, nc_reenviar.php, nc_email_pdf.php (download do PDF enviado), nc_previsualizar.php
 src/Views/              páginas
-  login.php, cadastro.php
+  login.php, cadastro.php, esqueci_senha.php, redefinir_senha.php, autenticacao_marca.php (painel da marca)
+  perfil.php
   menu.php              dashboard "Meus projetos"
-  projeto.php           página do projeto com as 3 abas
+  projeto.php           página do projeto com as 3 abas (+ projeto_membros.php: painel "Membros")
   navbar.php            componente compartilhado
   abas/pgq.php          partial da aba PGQ
   abas/checklist.php    partial da aba Checklist
   abas/checklist_linha.php  HTML de uma linha do checklist (aba + endpoint de adicionar)
   abas/nc.php           partial da aba Não Conformidades
-public/js/              api.js (enviarPost), login.js, cadastrar.js, menu.js, pgq.js, checklist.js, nc.js
-public/css/             login, cadastro, navbar, menu, projeto, pgq, checklist, nc
-scripts/                enviar_email.py — gera o PDF (reportlab) e envia (smtplib) (bloqueado na web)
+public/js/              api.js (enviarPost, abrirPdfPost), autenticacao.js, login.js, cadastrar.js, senha.js, perfil.js,
+                        menu.js, membros.js, pgq.js, checklist.js, nc.js
+public/css/             autenticacao (login/cadastro/senha), navbar, menu, perfil, projeto, pgq, checklist, nc
+scripts/                enviar_email.py — PDF da NC (reportlab) e envio (smtplib); documentos_pdf.py — PDFs do PGQ e do checklist (bloqueado na web)
 docker/                 apache/zz-deepcheck.conf, php/deepcheck.ini (bloqueado na web)
-index.html, style.css   landing page estática
+index.php, style.css    landing page (só envia os headers de segurança)
 ```
 
 A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta original; **a estrutura acima é a real e deve ser seguida.**
 
-### Pendências em aberto (consolidado de todas as fases — atualizado em 2026-09-25)
+### Pendências em aberto (consolidado de todas as fases — atualizado em 2026-09-26, após a Fase 9)
+
+**A Fase 9 resolveu quase todas as pendências abaixo (itens riscados).** Restam só as limitações aceitas listadas em "Limitações conhecidas (Fase 9)" e os itens não riscados.
+
 
 **Conta de usuário (Fase 1)**
-- Página de perfil (`perfil.php`) não existe (botão "Perfil" removido da navbar).
-- "Esqueceu a senha? Redefinir" no login é um link `#` sem funcionalidade.
+- ~~Página de perfil (`perfil.php`) não existe (botão "Perfil" removido da navbar).~~ ✅ Fase 9.
+- ~~"Esqueceu a senha? Redefinir" no login é um link `#` sem funcionalidade.~~ ✅ Fase 9.
 
 **Infraestrutura (Fase 1)**
-- `index.html` é estático e não recebe os headers de segurança do PHP (não tem formulários nem dados).
-- Healthcheck do MySQL usa `mysqladmin ping`, que dá "healthy" mesmo com a senha root errada.
-- Rate limit fica no `/tmp` do container e zera quando o container é recriado.
+- ~~`index.html` é estático e não recebe os headers de segurança do PHP (não tem formulários nem dados).~~ ✅ Fase 9.
+- ~~Healthcheck do MySQL usa `mysqladmin ping`, que dá "healthy" mesmo com a senha root errada.~~ ✅ Fase 9.
+- ~~Rate limit fica no `/tmp` do container e zera quando o container é recriado.~~ ✅ Fase 9.
 
 **Projetos (Fase 3)**
-- Não há como alterar a senha do projeto nem transferir a posse (criador) para outro usuário.
-- Membro não consegue "sair" de um projeto; o criador não consegue remover membros.
+- ~~Não há como alterar a senha do projeto nem transferir a posse (criador) para outro usuário.~~ ✅ Fase 9.
+- ~~Membro não consegue "sair" de um projeto; o criador não consegue remover membros.~~ ✅ Fase 9.
 
 **PGQ (Fase 4)**
-- Logo do projeto na capa (exige upload de arquivo).
-- Exportar/imprimir o PGQ no formato do documento (PDF/DOC).
-- Edição simultânea: vale o último salvamento, sem aviso de conflito.
+- ~~Logo do projeto na capa (exige upload de arquivo).~~ ✅ Fase 9.
+- ~~Exportar/imprimir o PGQ no formato do documento (PDF/DOC).~~ ✅ Fase 9.
+- ~~Edição simultânea: vale o último salvamento, sem aviso de conflito.~~ ✅ Fase 9.
 - ~~Edição das classificações/prazos da seção 6~~ ✅ Fase 8.
 
 **Checklist (Fase 5)**
-- Excluir o último item faz o próximo reutilizar o número.
+- ~~Excluir o último item faz o próximo reutilizar o número.~~ ✅ Fase 9.
 - ~~`data_escalonamento` e histórico de escalonamento~~ ✅ resolvido na Fase 7 (gravados pelo botão "Escalonar"; `escalonada` não é mais manual). ~~Bloqueio de alterações em NC enviada~~ ✅ Fase 6.
-- Nome do checklist fixo; importar/copiar itens de modelo; edição simultânea sem aviso de conflito.
+- ~~Nome do checklist fixo; importar/copiar itens de modelo; edição simultânea sem aviso de conflito.~~ ✅ Fase 9.
 
 **E-mail de NC (Fase 6)**
-- Pré-visualização do PDF; ~~tela para baixar o PDF/ver e-mails enviados~~ ✅ Fase 7; feriados fora do cálculo de prazo; itens com prazo antigo só recalculam ao trocar a classificação; e-mail enviado sem registro se a gravação final falhar (só log).
+- ~~Pré-visualização do PDF~~ ✅ Fase 9; ~~tela para baixar o PDF/ver e-mails enviados~~ ✅ Fase 7; ~~feriados fora do cálculo de prazo~~ ✅ Fase 9 (só nacionais); ~~itens com prazo antigo~~ ✅ recálculo único feito na Fase 9; e-mail enviado sem registro se a gravação final falhar (só log) — **aceito** (risco mínimo).
 
 **Não Conformidades (Fase 7)**
-- Responsável/e-mail do escalonamento não atualizam a NC (reenvio usa o e-mail original); sem escalonamento automático nem aviso de prazo vencido; reenvio sem registro se a gravação falhar (só log).
+- ~~Responsável/e-mail do escalonamento não atualizam a NC~~ ✅ Fase 9; ~~aviso de prazo vencido~~ ✅ Fase 9 (no dashboard); sem escalonamento automático — **decisão**: é sempre uma ação humana; reenvio sem registro se a gravação falhar (só log) — **aceito**.
 
 **Classificações (Fase 8)**
-- Sem histórico de quem alterou; checagem de "pelo menos 1" fora da transação (corrida improvável).
+- ~~Sem histórico de quem alterou; checagem de "pelo menos 1" fora da transação~~ ✅ Fase 9.
 
 **Banco**
 - Todas as tabelas do Modelo de Dados já existem (Fase 7: `nc_escalonamentos` + `nc_emails_enviados.escalonamento_id`). A Fase 8 (edição de classificações) não exige tabela nova.
@@ -601,6 +660,11 @@ O schema do banco é criado e mantido manualmente pelo desenvolvedor via **MySQL
 - Gerar migrations automáticas.
 - Executar `CREATE TABLE` / `ALTER TABLE` via script ou ferramenta.
 - Assumir que pode alterar a estrutura do banco sozinho.
+
+**Permissão concedida pelo desenvolvedor em 2026-09-26** (ao pedir o SQL da Fase 9): *"caso não funcione, você tem a permissão de mexer nas tabelas e colunas por conta própria, sem precisar me perguntar, apenas registre no claude.md"*. Ou seja: **quando um SQL entregue ao desenvolvedor não for aplicado corretamente**, o Claude Code pode aplicá-lo/corrigi-lo diretamente no banco — e **deve registrar aqui cada alteração feita** (o que, quando e por quê). Continuar propondo o SQL primeiro e conferindo com `SHOW CREATE TABLE`; a regra de "não gerar migrations automáticas" continua valendo.
+
+**Alterações de banco feitas pelo Claude Code (usando a permissão acima)**:
+- 2026-09-26 — preenchido o contador `checklists.ultimo_numero_item` com o maior `numero_item` de cada checklist (o `UPDATE` do SQL da Fase 9 não havia sido aplicado: o checklist do desenvolvedor estava com contador 0 e itens até o nº 5). Só dados; nenhuma mudança de estrutura.
 
 O Claude Code DEVE:
 - Trabalhar com o schema já existente no banco (a seção "Modelo de Dados" abaixo é a referência do que deve existir, mas o schema real criado no Workbench é a fonte da verdade).

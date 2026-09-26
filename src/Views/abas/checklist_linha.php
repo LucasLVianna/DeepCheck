@@ -49,7 +49,7 @@ function checklist_linha_html(array $item, array $classificacoes): string
         . ($dados['resultado'] === 'nao_conformidade' ? ' item-nc' : '')
         . ($dados['atrasado'] ? ' item-atrasado' : '');
 
-    return '<tr class="' . $classes . '" data-item-id="' . $dados['id'] . '">'
+    return '<tr class="' . $classes . '" data-item-id="' . $dados['id'] . '" data-versao="' . e($dados['versao']) . '">'
         . '<td class="col-numero">' . $numero . '</td>'
         . '<td><textarea data-campo="descricao" rows="2" maxlength="' . CHECKLIST_DESCRICAO_MAX . '" aria-label="Descrição do item ' . $numero . '"' . $travado . '>' . e($dados['descricao']) . '</textarea></td>'
         . '<td><select data-campo="resultado" aria-label="Resultado do item ' . $numero . '"' . $travado . '>'

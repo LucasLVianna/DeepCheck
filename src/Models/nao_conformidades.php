@@ -184,6 +184,25 @@ function nc_documento(array $nc, array $historico, ?string $observacoes): array
     ];
 }
 
+// Documento do 1º envio, montado a partir do item do checklist (a NC ainda não existe).
+// $envio: saída de nc_ler_envio() (responsável por QA e observações).
+function nc_documento_envio(string $projetoNome, array $item, array $classificacao, array $envio, string $agora): array
+{
+    return [
+        'projeto'                   => $projetoNome,
+        'responsavel_resolucao'     => $item['responsavel_resolucao'],
+        'responsavel_qa'            => $envio['responsavel_qa'],
+        'data_primeira_solicitacao' => nc_formatar_data($agora),
+        'prazo_resolucao'           => nc_formatar_data($item['data_prevista_resolucao']),
+        'numero_escalonamento'      => 0,
+        'descricao'                 => $item['descricao'],
+        'classificacao'             => $classificacao['nome'] . ' | ' . classificacao_prazo_texto($classificacao),
+        'acao_corretiva'            => $item['acao_corretiva_indicada'],
+        'historico'                 => [],
+        'observacoes'               => $envio['observacoes'],
+    ];
+}
+
 function nc_classificacao_texto(array $nc): string
 {
     return $nc['classificacao_nome'] . ' | ' . classificacao_prazo_texto($nc);
@@ -216,6 +235,10 @@ function nc_ler_escalonamento(array $post, string $unidade, string $agora): arra
     if ($responsavel === '' || mb_strlen($responsavel) > NC_NOME_MAX) {
         return ['erro' => 'Informe o responsável pela resolução (até ' . NC_NOME_MAX . ' caracteres).'];
     }
+    $responsavelEmail = mb_strtolower($texto('responsavel_email'));
+    if (!filter_var($responsavelEmail, FILTER_VALIDATE_EMAIL) || strlen($responsavelEmail) > 255) {
+        return ['erro' => 'Informe um e-mail válido para o responsável pela resolução.'];
+    }
     $observacoes = $texto('observacoes');
     if (mb_strlen($observacoes) > NC_OBSERVACOES_MAX) {
         return ['erro' => 'As observações podem ter no máximo ' . NC_OBSERVACOES_MAX . ' caracteres.'];
@@ -240,6 +263,7 @@ function nc_ler_escalonamento(array $post, string $unidade, string $agora): arra
         'superior_nome'         => $superiorNome,
         'superior_email'        => $superiorEmail,
         'responsavel_resolucao' => $responsavel,
+        'responsavel_email'     => $responsavelEmail,
         'novo_prazo'            => $novoPrazo,
         'observacoes'           => $observacoes === '' ? null : $observacoes,
     ];
@@ -377,8 +401,9 @@ function nc_email_pdf_do_membro(mysqli $conexao, int $emailId, int $usuarioId): 
     return $email ?: null;
 }
 
-// Registra o novo ciclo: linha em nc_escalonamentos, nº de escalonamento +1 e status
-// 'escalonada' na NC, e no item: status, data do escalonamento e prazo vigente = novo prazo.
+// Registra o novo ciclo: linha em nc_escalonamentos; na NC, nº de escalonamento +1, status
+// 'escalonada' e o responsável (nome e e-mail) informado no escalonamento; no item: status,
+// responsável, data do escalonamento e prazo vigente = novo prazo.
 // Deve rodar dentro da transação do envio. Retorna o id do escalonamento.
 function nc_registrar_escalonamento(mysqli $conexao, array $nc, array $escalonamento, int $usuarioId, string $agora): int
 {
@@ -399,17 +424,22 @@ function nc_registrar_escalonamento(mysqli $conexao, array $nc, array $escalonam
     $escalonamentoId = $conexao->insert_id;
     $stmt->close();
 
-    $stmt = $conexao->prepare("UPDATE nao_conformidades SET numero_escalonamento = ?, status = 'escalonada' WHERE id = ?");
-    $stmt->bind_param("ii", $numero, $nc['id']);
+    $stmt = $conexao->prepare(
+        "UPDATE nao_conformidades
+            SET numero_escalonamento = ?, status = 'escalonada', responsavel_resolucao = ?, responsavel_email = ?
+          WHERE id = ?"
+    );
+    $stmt->bind_param("issi", $numero, $escalonamento['responsavel_resolucao'], $escalonamento['responsavel_email'], $nc['id']);
     $stmt->execute();
     $stmt->close();
 
     $stmt = $conexao->prepare(
         "UPDATE checklist_itens
-            SET status_nc = 'escalonada', data_escalonamento = ?, data_prevista_resolucao = ?, data_conclusao_nc = NULL
+            SET status_nc = 'escalonada', data_escalonamento = ?, data_prevista_resolucao = ?, data_conclusao_nc = NULL,
+                responsavel_resolucao = ?
           WHERE id = ?"
     );
-    $stmt->bind_param("ssi", $agora, $escalonamento['novo_prazo'], $nc['checklist_item_id']);
+    $stmt->bind_param("sssi", $agora, $escalonamento['novo_prazo'], $escalonamento['responsavel_resolucao'], $nc['checklist_item_id']);
     $stmt->execute();
     $stmt->close();
 

@@ -1,91 +1,56 @@
-const cadastroForm = document.getElementById('formCadastro');
-const entrarButton = document.getElementById('entrar');
-const cepInput = document.getElementById('cep');
+const formCadastro = document.getElementById('formCadastro');
+const campos = {
+    nome: document.getElementById('nome'),
+    email: document.getElementById('email'),
+    cep: document.getElementById('cep'),
+    senha: document.getElementById('senha'),
+    confirmarSenha: document.getElementById('confirmarSenha')
+};
 
-function formatCep(value) {
-    let digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+// Máscara 00000-000.
+campos.cep.addEventListener('input', () => {
+    const digitos = campos.cep.value.replace(/\D/g, '').slice(0, 8);
+    campos.cep.value = digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+});
 
-    if (digits.length > 5) {
-        digits = `${digits.slice(0, 5)}-${digits.slice(5)}`;
+function validar() {
+    const erros = [];
+    if (!campos.nome.value.trim()) erros.push([campos.nome, 'Informe seu nome.']);
+    if (!emailValido(campos.email.value.trim())) {
+        erros.push([campos.email, campos.email.value.trim() ? 'Digite um e-mail válido.' : 'Informe seu e-mail.']);
     }
-
-    return digits;
+    if (campos.cep.value.replace(/\D/g, '').length !== 8) erros.push([campos.cep, 'Digite um CEP válido (00000-000).']);
+    if (!senhaForte(campos.senha.value)) erros.push([campos.senha, 'A senha ainda não atende a todos os requisitos acima.']);
+    if (!campos.confirmarSenha.value) {
+        erros.push([campos.confirmarSenha, 'Confirme a senha.']);
+    } else if (campos.confirmarSenha.value !== campos.senha.value) {
+        erros.push([campos.confirmarSenha, 'As senhas não conferem.']);
+    }
+    erros.forEach(([campo, mensagem]) => mostrarErroCampo(campo, mensagem));
+    return erros.length === 0;
 }
 
-function cepDigitsLength(value) {
-    return String(value || '').replace(/\D/g, '').length;
-}
-
-cadastroForm.addEventListener('submit', (event) => {
+formCadastro.addEventListener('submit', async (event) => {
     event.preventDefault();
-    cadastrar();
-});
-
-entrarButton.addEventListener('click', () => {
-    window.location.href = '/src/Views/login.php';
-});
-
-cepInput.addEventListener('input', () => {
-    cepInput.value = formatCep(cepInput.value);
-});
-
-async function cadastrar() {
-    const nome = document.getElementById('nome').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const senha = document.getElementById('senha').value;
-    const cep = formatCep(cepInput.value);
-
-    if(!nome){
-        document.getElementById('error-nome').textContent = 'Nome precisa receber valores';
+    esconderAlerta();
+    if (!validar()) {
+        formCadastro.querySelector('[aria-invalid="true"]').focus();
         return;
     }
 
-    if(!email){
-        document.getElementById('error-email').textContent = 'Email precisa receber valores';
-        return;
-    }else if(!email.includes('@') && !email.includes('.')) {
-        document.getElementById('error-email').textContent = 'Digite um email válido, no formato @xxx.xxx';
-        return;
-    }
-
-    if(!senha){
-        document.getElementById('error-senha').textContent = 'Senha precisa receber valores';
-        return;
-    }else if(senha.length < 8 || !/[A-Z]/.test(senha) || !/[a-z]/.test(senha) || !/[0-9]/.test(senha) || !/[@$!%*?&]/.test(senha)) {
-        document.getElementById('error-senha').textContent = 'ERRO! Senha deve conter no mínimo 8 caracteres, letras maiúsculas, minúsculas, números e caracteres especiais.';
-        return;
-    }
-
-    if (!cep || cepDigitsLength(cep) !== 8) {
-        document.getElementById('error-cep').textContent = 'Digite um CEP válido no formato 00000-000.';
-        cepInput.focus();
-        return;
-    }
-
-    const fd = new FormData();
-    fd.append('nome', nome);
-    fd.append('email', email);
-    fd.append('senha', senha);
-    fd.append('cep', cep);
-
-    const retorno = await fetch('/src/Controllers/cadastrar_backend.php', {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
-        body: fd
+    const botao = document.getElementById('botaoCriarConta');
+    botaoCarregando(botao, true, 'Criando conta...');
+    const resposta = await enviarPost('/src/Controllers/cadastrar_backend.php', {
+        nome: campos.nome.value.trim(),
+        email: campos.email.value.trim(),
+        cep: campos.cep.value,
+        senha: campos.senha.value
     });
 
-    const resposta = await retorno.json();
     if (resposta.status === 'ok') {
-        document.getElementById('error').style.color = '#00ffa3';
-        document.getElementById('error').textContent = 'SUCESSO! Cadastro realizado com êxito' + '. Redirecionando para a página de login...';
-        setTimeout(() => {
-            window.location.href = '/src/Views/login.php';
-        }, 1000);
+        window.location.href = '/src/Views/login.php?motivo=cadastro';
         return;
-    }else{
-        document.getElementById('error').style.color = '#ff6b6b';
-        document.getElementById('error').textContent = 'ERRO! ' + resposta.mensagem;
     }
-
-    
-}
+    botaoCarregando(botao, false);
+    mostrarAlerta(resposta.mensagem, 'erro');
+});

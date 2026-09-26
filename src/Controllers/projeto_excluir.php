@@ -21,7 +21,7 @@ if ($projeto === null) {
 }
 if ((int) $projeto['criado_por'] !== $usuarioId) {
     $conexao->close();
-    responder_json(['status' => 'nok', 'mensagem' => 'Apenas quem criou o projeto pode excluí-lo.'], 403);
+    responder_json(['status' => 'nok', 'mensagem' => 'Apenas o dono do projeto pode excluí-lo.'], 403);
 }
 
 try {

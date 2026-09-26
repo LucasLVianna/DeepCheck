@@ -1,3 +1,7 @@
+<?php
+// Página inicial (landing). Só envia os headers de segurança: não usa sessão nem banco.
+require_once __DIR__ . '/config/headers.php';
+?>
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
