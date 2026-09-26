@@ -14,7 +14,7 @@ Este documento é o contexto persistente do projeto. Leia-o antes de qualquer al
 
 ## ▶️ Ponto de retomada (atualizado em 2026-09-25)
 
-**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Fase 7 concluída e validada no navegador** (com escalonamento real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 7: aba Não Conformidades e escalonamento"). **Próximo e último passo do plano: Fase 8** — tela para editar as classificações/prazos de NC do projeto (hoje só leitura na seção 6 do PGQ); não exige tabela nova. Pontos a decidir com o desenvolvedor antes: onde fica a tela (seção 6 do PGQ, como diz "Regras de Negócio › 2"), quem pode editar (criador ou qualquer membro), o que acontece com NCs/itens que já usam uma classificação quando o prazo muda (recalcular ou não) e bloqueio de exclusão de classificação em uso (FK RESTRICT já existe). Plano original da etapa de análise (já cumprido): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
+**Onde paramos** (atualizado em 2026-09-26): Fases 1, 3, 4, 5 e **6** concluídas e validadas no navegador (Fase 6 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 6: envio da NC por e-mail"). **Fase 7 concluída e validada no navegador** (com escalonamento real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 7: aba Não Conformidades e escalonamento"). **🎉 Plano de 8 fases CONCLUÍDO** (2026-09-26): todas as fases implementadas, testadas via HTTP e validadas pelo desenvolvedor no navegador (Fases 6 e 7 com envio real pelo Gmail). Tudo commitado, com merge na `main` e push para o GitHub (commit "Fase 8: classificações e prazos de NC"). **Próximos passos possíveis**: itens de "Pendências em aberto" que o desenvolvedor escolher (seguir a mesma forma de trabalho: decisões antes de codar, SQL proposto quando precisar de schema, testes via HTTP com dados descartáveis, registro aqui). Plano original da etapa de análise (já cumprido): propor o SQL de `nc_escalonamentos` (+ coluna/FK `nc_emails_enviados.escalonamento_id`) e as regras (quem é o superior, CC para os envolvidos dos ciclos anteriores, novo prazo, `numero_escalonamento` +1, status `escalonada`, preencher `checklist_itens.data_escalonamento`, histórico no PDF, tirar `escalonada` da seleção manual no checklist), validar num MySQL descartável e esperar o desenvolvedor criar no Workbench. Fase 2 (modelo de dados) avança junto com cada fase.
 
 **Ao retomar, fazer nesta ordem:**
 1. ~~Validar a Fase 5 no navegador~~ ✅ validada em 2026-09-26. ~~`DROP INDEX uk_checklists_projeto_nome`~~ ✅ aplicado.
@@ -460,7 +460,48 @@ Todos passaram, sem erros/warnings no log. Envios por uma **cópia temporária d
 - Sem escalonamento automático quando o prazo vence (é sempre uma ação do usuário); sem notificação de prazo vencido.
 - Filtro da aba é só no navegador (sem paginação; ok para o volume esperado).
 
-### Estrutura real de arquivos (após a Fase 7)
+### Decisões para a Fase 8 — Classificações e prazos de NC (desenvolvedor, 2026-09-26)
+
+1. **Onde**: na **seção 6 do PGQ** ("6. Definição das Não-Conformidades"), que deixa de ser só leitura.
+2. **Quem**: **qualquer membro do projeto** cria, edita e exclui classificações (mesmo critério do PGQ e do checklist).
+3. **Mudar o prazo de uma classificação em uso**: **recalcula a data prevista dos itens do checklist com NC ainda não enviada** que usam aquela classificação (a partir da data de identificação, pela regra de dias úteis). **NCs já enviadas por e-mail mantêm o prazo comunicado**. Os próximos escalonamentos usam a duração nova.
+4. **Excluir uma classificação em uso**: permitido **escolhendo outra classificação para substituí-la** nos itens do checklist e nas NCs que usam a excluída. Nos itens com NC ainda não enviada, a data prevista é recalculada com a substituta; NCs já enviadas mantêm o prazo (o PDF enviado não muda). Classificação sem uso é excluída direto.
+
+**Premissas adotadas pelo Claude Code (a confirmar)**: o projeto precisa ter **pelo menos 1 classificação** (sem nenhuma, não dá para enviar NC); nome de 1 a 50 caracteres e único no projeto (já garantido pelo `UNIQUE (projeto_id, nome)`); prazo inteiro de 1 a 999 (horas ou dias úteis). As classificações são salvas **na hora, a cada ação** (separadas do botão "Salvar" do restante do PGQ). **Não exige tabela nova**.
+
+### Fase 8 — Classificações e prazos de NC: concluída, testada via HTTP e validada no navegador (2026-09-26)
+
+#### O que foi implementado
+
+- **Seção 6 do PGQ editável** (`src/Views/abas/pgq.php`): tabela com nome, prazo (1–999), unidade (`horas` / `dias úteis`), "Em uso" (quantos itens do checklist e NCs enviadas usam) e botões Salvar/Excluir por linha, mais uma linha "Nova classificação" + "Adicionar". **Salva na hora, a cada ação** — separado do botão "Salvar" do plano: os campos do editor não têm `name` (não vão no POST do PGQ), o `input` neles não liga o aviso de alterações não salvas e Enter salva a linha em vez de enviar o formulário do plano. Os dados iniciais vêm num atributo `data-classificacoes` escapado (sem `<script>` inline). A tabela é redesenhada a partir da lista devolvida pelo servidor após cada ação.
+- **Excluir**: sem uso → `confirm()` e exclui; **em uso** → `<dialog>` (fora do `formPgq`, pois formulário dentro de formulário é inválido) explicando o uso e pedindo a **classificação substituta**. Não dá para excluir a última classificação (botão desabilitado + 409).
+- **Endpoints** (login + CSRF + membro; qualquer membro edita):
+  - `src/Controllers/classificacao_salvar.php` (`projeto_id`, `id` opcional, `nome`, `prazo_valor`, `prazo_unidade`): cria (201) ou edita; nome repetido no projeto → 409; devolve a lista atualizada com uso e a mensagem (inclui quantos itens tiveram a data prevista recalculada).
+  - `src/Controllers/classificacao_excluir.php` (`id`, `substituta_id` quando em uso): em uso sem substituta → 409 com `em_uso {itens, ncs}`; substituta inválida (ela mesma ou de outro projeto) → 400; última classificação → 409.
+- **Model** `src/Models/classificacoes_nc.php`: `CLASSIFICACAO_NOME_MAX = 50`, `CLASSIFICACAO_PRAZO_MAX = 999`, `CLASSIFICACAO_UNIDADES`; `classificacoes_com_uso()`, `classificacao_do_membro()`, `classificacao_ler_entrada()`, `classificacao_salvar()` (transação; se o prazo mudou chama `classificacao_recalcular_itens()`), `classificacao_recalcular_itens()` (itens NC **sem** NC enviada, a partir da identificação, em dias úteis), `classificacoes_quantidade()`, `classificacao_excluir()` (transação: substitui nos itens e nas NCs, recalcula os itens não enviados com a substituta, exclui).
+- `projeto.php` passa `classificacoes_com_uso()` para a aba PGQ.
+- **Efeitos nas outras telas**: o checklist passa a oferecer as classificações atuais; NCs enviadas continuam com o prazo comunicado, mas mostram a classificação atual (após substituição) e os **próximos escalonamentos usam a duração atual** da classificação.
+
+#### Arquivos da Fase 8
+
+- **Criados**: `src/Controllers/classificacao_salvar.php`, `src/Controllers/classificacao_excluir.php`.
+- **Alterados**: `src/Models/classificacoes_nc.php`, `src/Views/abas/pgq.php`, `src/Views/projeto.php`, `public/js/pgq.js`, `public/css/pgq.css`.
+
+#### Testes realizados (dados de teste apagados ao final)
+
+Todos passaram, sem erros/warnings no log. Cenário com 3 itens NC: Média não enviada, Média **enviada por e-mail** (via cópia do app com Mailpit) e Alta não enviada.
+- **Validação (PHP CLI, 10 casos)**: nome aparado; vazio, >50 caracteres, array → erro; prazo 0, 1000, 2.5, texto → erro; unidade inválida → erro.
+- **HTTP**: seção 6 com uso correto por classificação, campos sem `name`, dialog fora do formulário, aviso "próxima versão" removido; criar por membro não criador (201, HTML no nome aceito como texto), sem CSRF 403, não membro 404, nome repetido (sem diferenciar maiúsculas) 409, prazo 0 → 400; **editar Média 3 → 5 dias recalculou só o item não enviado (30/09 → 02/10), o item enviado e a NC mantiveram 30/09**; só renomear → nada recalculado; projeto errado → 404; excluir sem uso → ok; em uso sem substituta → 409 com contagem (2 itens, 1 NC); substituta = ela mesma ou de outro projeto → 400; **substituir Moderada por Alta** → itens e NC passam a Alta, item não enviado recalculado (→ 29/09 00:00), item enviado e prazo da NC inalterados; excluir a última → 409; Alta 24 → 48 horas recalculou 2 itens; mensagens completas conferidas; o PGQ continua salvando normalmente; checklist e aba NC mostram a classificação atual; **excluir o projeto com classificação em uso por itens e NC funciona**.
+
+**Validado pelo desenvolvedor no navegador (2026-09-26)**: "tudo funcionando" — adicionar, editar prazo (com recálculo), excluir com substituição e Enter na seção 6.
+
+#### Pendências conhecidas da Fase 8
+
+- A verificação "pelo menos 1 classificação" e o uso da classificação são lidos antes da transação de exclusão: duas exclusões simultâneas no mesmo projeto poderiam, em tese, deixá-lo sem nenhuma (não crítico; o envio de NC exige classificação no item).
+- Mudanças de classificação não geram histórico/auditoria (quem mudou e quando).
+- O número de itens "recalculados" na exclusão com substituição inclui itens que já usavam a substituta (recalculados com o mesmo resultado).
+
+### Estrutura real de arquivos (após a Fase 8)
 
 ```
 config/                 bootstrap incluído por tudo (bloqueado na web)
@@ -475,11 +516,12 @@ src/Models/             acesso a dados (bloqueado na web)
   pgq.php               PGQ e sub-tabelas (seções 2, 3, 4)
   checklist.php         checklist, itens, regras de NC, prazo em dias úteis e fórmula de aderência
   nao_conformidades.php NCs enviadas, escalonamentos, reenvio, textos dos e-mails e registro dos envios
-  classificacoes_nc.php leitura das classificações (Fase 8 vai estender)
+  classificacoes_nc.php classificações de NC: uso, criar/editar (recalcula prazos), excluir com substituição
 src/Controllers/        endpoints (JSON, exceto logoff)
   login_backend.php, cadastrar_backend.php, logoff.php
   projeto_criar.php, projeto_editar.php, projeto_excluir.php, projeto_acessar.php
   pgq_salvar.php
+  classificacao_salvar.php, classificacao_excluir.php (seção 6 do PGQ)
   checklist_item_adicionar.php, checklist_item_atualizar.php, checklist_item_excluir.php
   nc_enviar.php         gera o PDF e envia a Solicitação de Resolução de NC (1º envio)
   nc_escalonar.php, nc_reenviar.php, nc_email_pdf.php (download do PDF enviado)
@@ -520,7 +562,7 @@ A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta origina
 - Logo do projeto na capa (exige upload de arquivo).
 - Exportar/imprimir o PGQ no formato do documento (PDF/DOC).
 - Edição simultânea: vale o último salvamento, sem aviso de conflito.
-- Edição das classificações/prazos da seção 6 → **Fase 8**.
+- ~~Edição das classificações/prazos da seção 6~~ ✅ Fase 8.
 
 **Checklist (Fase 5)**
 - Excluir o último item faz o próximo reutilizar o número.
@@ -532,6 +574,9 @@ A seção "Sugestão de Estrutura de Arquivos" mais abaixo é a proposta origina
 
 **Não Conformidades (Fase 7)**
 - Responsável/e-mail do escalonamento não atualizam a NC (reenvio usa o e-mail original); sem escalonamento automático nem aviso de prazo vencido; reenvio sem registro se a gravação falhar (só log).
+
+**Classificações (Fase 8)**
+- Sem histórico de quem alterou; checagem de "pelo menos 1" fora da transação (corrida improvável).
 
 **Banco**
 - Todas as tabelas do Modelo de Dados já existem (Fase 7: `nc_escalonamentos` + `nc_emails_enviados.escalonamento_id`). A Fase 8 (edição de classificações) não exige tabela nova.
@@ -844,6 +889,6 @@ Recomenda-se a fila assíncrona se o volume de e-mails crescer, mas a síncrona 
 5. **Fase 5 — Aba Checklist** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-26 — ver "Fase 5 — Aba Checklist")*: CRUD de itens, cálculo de aderência em tempo real, marcação de NC com timestamp automático.
 6. **Fase 6 — Fluxo de e-mail de NC** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador com envio real pelo Gmail em 2026-09-26 — ver "Fase 6 — Envio da NC por e-mail")*: formulário de envio, integração com script Python, template de comunicação.
 7. **Fase 7 — Aba Não Conformidades** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador com escalonamento real em 2026-09-26 — ver "Fase 7 — Aba Não Conformidades + escalonamento")*: listagem, status, histórico, ação de escalonamento (reaproveitando o fluxo de e-mail da Fase 6 com campos extras).
-8. **Fase 8 — Configuração de classificações/prazos por projeto**: tela para o usuário definir "Simples/Média/Alta" e seus prazos, usada pelas Fases 5 e 7.
+8. **Fase 8 — Configuração de classificações/prazos por projeto** ✅✅ *(concluída, testada via HTTP e validada pelo desenvolvedor no navegador em 2026-09-26 — ver "Fase 8 — Classificações e prazos de NC")*: tela para o usuário definir "Simples/Média/Alta" e seus prazos, usada pelas Fases 5 e 7.
 
 Recomenda-se pedir ao Claude Code para executar **uma fase por vez**, revisando o resultado antes de avançar.

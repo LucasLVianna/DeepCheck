@@ -33,7 +33,7 @@
         require_once __DIR__ . '/../Models/pgq.php';
         require_once __DIR__ . '/../Models/classificacoes_nc.php';
         $pgq = pgq_do_projeto($conexao, $projetoId);
-        $classificacoes = classificacoes_do_projeto($conexao, $projetoId);
+        $classificacoes = classificacoes_com_uso($conexao, $projetoId);
         $arquivosAba = ['css' => '/public/css/pgq.css', 'js' => '/public/js/pgq.js'];
     } elseif ($abaAtual === 'checklist') {
         require_once __DIR__ . '/../Models/checklist.php';

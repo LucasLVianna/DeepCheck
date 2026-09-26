@@ -1,6 +1,6 @@
 <?php
 // Aba "Plano de Garantia da Qualidade" — incluída por src/Views/projeto.php, que carrega
-// $projeto, $pgq (pgq_do_projeto) e $classificacoes (classificacoes_do_projeto).
+// $projeto, $pgq (pgq_do_projeto) e $classificacoes (classificacoes_com_uso).
 // Seções e colunas seguem o template "Plano de Garantia da Qualidade".
 if (!isset($projeto, $pgq, $classificacoes)) {
     http_response_code(404);
@@ -139,23 +139,53 @@ function pgq_linha_html(string $chave, array $linha = []): string
 
     <section class="pgq-secao">
         <h3>6. Definição das Não-Conformidades</h3>
-        <p class="pgq-descricao">Gravidade de cada tipo de não conformidade e prazo de resolução:</p>
-        <div class="tabela-rolagem">
-            <table class="pgq-tabela pgq-tabela-leitura">
-                <thead>
-                    <tr><th>Classificação</th><th>Prazo de resolução</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($classificacoes as $classificacao): ?>
-                        <tr>
-                            <td><?= e($classificacao['nome']) ?></td>
-                            <td><?= e(classificacao_prazo_texto($classificacao)) ?></td>
+        <p class="pgq-descricao">Gravidade de cada tipo de não conformidade e prazo de resolução (contado em dias úteis, sem sábados e domingos):</p>
+        <?php // Editor de classificações: salvo na hora, a cada ação (fora do botão "Salvar" do plano). Os campos não têm "name" para não irem no POST do PGQ. ?>
+        <div class="classificacoes" id="classificacoes" data-projeto-id="<?= (int) $projeto['id'] ?>" data-classificacoes="<?= e(json_encode($classificacoes, JSON_UNESCAPED_UNICODE)) ?>">
+            <div class="tabela-rolagem">
+                <table class="pgq-tabela classificacoes-tabela">
+                    <thead>
+                        <tr><th>Classificação</th><th>Prazo</th><th>Unidade</th><th>Em uso</th><th><span class="visualmente-oculto">Ações</span></th></tr>
+                    </thead>
+                    <tbody id="linhasClassificacoes"></tbody>
+                    <tfoot>
+                        <tr class="classificacao-nova">
+                            <td><input type="text" data-campo="nome" maxlength="<?= CLASSIFICACAO_NOME_MAX ?>" placeholder="Nova classificação" aria-label="Nome da nova classificação"></td>
+                            <td><input type="number" data-campo="prazo_valor" min="1" max="<?= CLASSIFICACAO_PRAZO_MAX ?>" step="1" aria-label="Prazo da nova classificação"></td>
+                            <td>
+                                <select data-campo="prazo_unidade" aria-label="Unidade do prazo da nova classificação">
+                                    <?php foreach (CLASSIFICACAO_UNIDADES as $valor => $rotulo): ?>
+                                        <option value="<?= $valor ?>"<?= $valor === 'dias' ? ' selected' : '' ?>><?= e($rotulo) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </td>
+                            <td></td>
+                            <td><button type="button" class="js-adicionar-classificacao">Adicionar</button></td>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </tfoot>
+                </table>
+            </div>
+            <template id="modeloClassificacao">
+                <tr>
+                    <td><input type="text" data-campo="nome" maxlength="<?= CLASSIFICACAO_NOME_MAX ?>" aria-label="Nome da classificação"></td>
+                    <td><input type="number" data-campo="prazo_valor" min="1" max="<?= CLASSIFICACAO_PRAZO_MAX ?>" step="1" aria-label="Prazo"></td>
+                    <td>
+                        <select data-campo="prazo_unidade" aria-label="Unidade do prazo">
+                            <?php foreach (CLASSIFICACAO_UNIDADES as $valor => $rotulo): ?>
+                                <option value="<?= $valor ?>"><?= e($rotulo) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                    <td class="classificacao-uso"></td>
+                    <td class="classificacao-acoes">
+                        <button type="button" class="js-salvar-classificacao">Salvar</button>
+                        <button type="button" class="js-excluir-classificacao botao-perigo">Excluir</button>
+                    </td>
+                </tr>
+            </template>
+            <p class="mensagem" id="mensagemClassificacoes" role="status"></p>
+            <p class="dica">As classificações são salvas na hora (não dependem do botão "Salvar" do plano). Ao mudar o prazo, a data prevista dos itens do checklist com NC <strong>ainda não enviada</strong> é recalculada; NCs já enviadas mantêm o prazo comunicado. Para excluir uma classificação em uso, escolha outra para substituí-la.</p>
         </div>
-        <p class="dica">A edição das classificações e prazos estará disponível em uma próxima versão.</p>
         <label for="pgqDefinicaoNc">Regras e observações sobre as não-conformidades</label>
         <textarea id="pgqDefinicaoNc" name="definicao_nc_texto" rows="4" maxlength="<?= PGQ_TEXTO_LONGO_MAX ?>" placeholder="Estabelecer a gravidade para cada tipo de não conformidade e prazo de resolução."><?= e($dados['definicao_nc_texto'] ?? '') ?></textarea>
     </section>
@@ -178,3 +208,18 @@ function pgq_linha_html(string $chave, array $linha = []): string
         <button type="submit">Salvar</button>
     </div>
 </form>
+
+<?php // Fora do formPgq: formulário dentro de formulário é HTML inválido. ?>
+<dialog id="dialogExcluirClassificacao" class="dialog-classificacao" aria-labelledby="tituloExcluirClassificacao">
+    <form id="formExcluirClassificacao" method="dialog">
+        <h3 id="tituloExcluirClassificacao">Excluir classificação</h3>
+        <p id="textoExcluirClassificacao"></p>
+        <label for="substitutaClassificacao">Substituir por <span class="obrigatorio">*</span></label>
+        <select id="substitutaClassificacao" required></select>
+        <p class="mensagem" id="mensagemExcluirClassificacao" role="status"></p>
+        <div class="dialog-acoes">
+            <button type="button" id="cancelarExcluirClassificacao">Cancelar</button>
+            <button type="submit" class="botao-perigo">Substituir e excluir</button>
+        </div>
+    </form>
+</dialog>

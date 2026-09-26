@@ -73,11 +73,6 @@
     width: 1%;
 }
 
-.pgq-tabela-leitura {
-    min-width: 0;
-    max-width: 480px;
-}
-
 .botao-secundario {
     align-self: flex-start;
 }
@@ -137,4 +132,65 @@
 .pgq-mes-ano select {
     flex: 1;
     font: inherit;
+}
+
+.classificacoes-tabela {
+    min-width: 640px;
+}
+
+.classificacoes-tabela input[type="number"] {
+    box-sizing: border-box;
+    width: 6rem;
+    font: inherit;
+}
+
+.classificacoes-tabela select {
+    font: inherit;
+}
+
+.classificacao-acoes {
+    white-space: nowrap;
+}
+
+.classificacao-nova td {
+    background: #fafafa;
+}
+
+.botao-perigo {
+    color: #c62828;
+}
+
+.dialog-classificacao {
+    width: min(520px, calc(100vw - 2rem));
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.dialog-classificacao::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog-classificacao form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.dialog-classificacao h3 {
+    margin: 0;
+}
+
+.dialog-classificacao select {
+    font: inherit;
+}
+
+.dialog-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.obrigatorio {
+    color: red;
 }
