@@ -91,6 +91,10 @@
     min-width: 260px;
 }
 
+.checklist-tabela td:nth-child(3) {
+    min-width: 160px;
+}
+
 .checklist-tabela td:nth-child(7) {
     min-width: 200px;
 }
@@ -144,6 +148,10 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+.checklist-tabela td:nth-child(11) {
+    min-width: 170px;
 }
 
 .checklist-tabela td:nth-child(12) {
